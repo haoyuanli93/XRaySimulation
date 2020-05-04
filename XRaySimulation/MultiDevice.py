@@ -20,25 +20,18 @@ def get_kout(device_list, kin):
     # The reason to use is numpy array is that it's easy to determine the
     # total number of kouts generates and with numpy array, it might be more
     # efficient.
-    kout_list = np.zeros((len(device_list), 3), dtype=np.float64)
+    kout_list = np.zeros((len(device_list + 1), 3), dtype=np.float64)
     kout_list[0] = kin[:]
 
     for idx in range(len(device_list)):
-
         # Get the device
         device = device_list[idx]
 
-        # Get output wave vector
-        if device.type == "Crystal: Bragg Reflection":
-            kout_list[idx + 1] = util.get_bragg_kout(kin=kout_list[idx],
-                                                     h=device.h,
-                                                     normal=device.normal)
-        if device.type == "Transmissive Grating":
-            kout_list[idx + 1] = kout_list[-1] + device.momentum_transfer
+        # Get the output wave vector
+        kout_list[idx + 1] = util.get_kout(device=device,
+                                           kin=kout_list[idx])
 
-        if device.type == "Transmission Telescope for CPA":
-            kout_list[idx + 1] = util.get_telescope_kout(optical_axis=device.lens_axis,
-                                                         kin=kout_list[idx])
+    return kout_list
 
 
 def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plane_normal):
@@ -223,17 +216,28 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
 
 
 def get_output_efficiency(device_list, kin):
-    # Create a variable for the kout list.
-    # The reason to use is numpy array is that it's easy to determine the
-    # total number of kouts generates and with numpy array, it might be more
-    # efficient.
+    """
+    Get the reflectivity of this kin.
+    Notice that this function is not particularly useful.
+    It just aims to make the function lists complete.
+
+    :param device_list:
+    :param kin:
+    :return:
+    """
+    efficiency_list = np.zeros(len(device_list), dtype=np.complex128)
+
+    # Variable for the kout
     kout_list = np.zeros((len(device_list), 3), dtype=np.float64)
     kout_list[0] = kin[:]
 
+    # Loop through all the devices
     for idx in range(len(device_list)):
 
         # Get the device
         device = device_list[idx]
+
+        # Get the efficiency
 
         # Get output wave vector
         if device.type == "Crystal: Bragg Reflection":

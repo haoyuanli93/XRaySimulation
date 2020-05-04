@@ -4,6 +4,8 @@ import numpy as np
 This module is the lowest-level module. It does not depend on another modules.
 """
 pi = np.pi
+two_pi = 2 * np.pi
+
 hbar = 0.0006582119514  # This is the reduced planck constant in keV/fs
 
 c = 299792458. * 1e-9  # The speed of light in um / fs
@@ -79,9 +81,16 @@ def wave_number_to_kev(wavevec):
 
 
 # --------------------------------------------------------------
-#          Get output wave vectors
+#          Uncertainty Principle
 # --------------------------------------------------------------
-def get_bragg_kout(kin, h, normal, compare_length=False):
+def bandwidth_sigma_kev_to_duration_sigma_fs(bandwidth_kev):
+    return hbar / 2. / bandwidth_kev
+
+
+# --------------------------------------------------------------
+#          For Bragg Reflection
+# --------------------------------------------------------------
+def get_bragg_kout(kin, h, normal):
     """
     This function produce the output wave vector from a Bragg reflection.
 
@@ -89,11 +98,8 @@ def get_bragg_kout(kin, h, normal, compare_length=False):
     :param h: The reciprocal lattice of the crystal
     :param normal: The normal direction of the reflection surface.
                     For a bragg reflection, n is pointing to the inside of the crystal.
-    :param compare_length: Whether compare the length of the incident wave vector and the output wave vector
 
     :return: kout: (3,) numpy array. The diffraction wave vector.
-            ratio: When compare_length=True, the second output is the ratio between the incident wave number
-                                        and the output wave number.
     """
 
     # kout holder
@@ -114,200 +120,9 @@ def get_bragg_kout(kin, h, normal, compare_length=False):
     # Add momentum transfer
     kout += normal * momentum
 
-    if compare_length:
-        return kout, klen / l2_norm(kout)
-    else:
-        return kout
+    return kout
 
 
-# --------------------------------------------------------------
-#          Geometry functions
-# --------------------------------------------------------------
-def get_intersection(initial_position, k, normal, surface_point):
-    """
-    Assume that a line starts from point s along the direction k. It will intersect with
-    the plane that passes through point x0 and has normal direction n. The function find the
-    resulted intersection point.
-
-    This function assumes that the arguments are arrays of points.
-
-    :param initial_position: array of shape [3], starting points for each array
-    :param k: array of shape [3], the direction for each array
-    :param normal: array of shape [3], the normal direction of the surface
-    :param surface_point: array of shape [3], one point on this surface
-    :return:
-    """
-    # The intersection points for each array
-    x = np.copy(initial_position)
-
-    # Do the math
-    tmp = np.divide(np.dot(surface_point - initial_position, normal), np.dot(k, normal))
-    x += tmp * k
-    return x
-
-
-# --------------------------------------------------------------
-#          Geometric operation
-# --------------------------------------------------------------
-def get_total_path_length(intersect_list):
-    """
-    Get the path length of a series of points
-
-    :param intersect_list:
-    :return:
-    """
-    number = len(intersect_list)
-    total_path = 0.
-    for l in range(number - 1):
-        total_path += l2_norm(intersect_list[l + 1] -
-                              intersect_list[l])
-
-    return total_path
-
-
-# ---------------------------------------------------------------------------
-#                     Grating
-# ---------------------------------------------------------------------------
-def get_grating_output_momentum(grating_wavenum, k_vec):
-    """
-    Calculate output momentum of the grating with the specified wave number and
-    the corresponding incident k_vec
-
-    :param grating_wavenum:
-    :param k_vec:
-    :return:
-    """
-    wavenum_reshape = np.reshape(grating_wavenum, (1, 3))
-    return k_vec + wavenum_reshape
-
-
-def get_grating_wavenumber_1d(direction, period, order):
-    """
-
-    :param direction:
-    :param period:
-    :param order:
-    :return:
-    """
-    return order * direction * 2. * np.pi / period
-
-
-def get_grating_period(dtheta, klen_in):
-    """
-    Derive the grating period based on the deviation angle and the incident wave number.
-    Here, one assume that the incident wave vector is perpendicular to the the grating surface.
-
-    :param dtheta:
-    :param klen_in:
-    :return:
-    """
-    period = 2 * np.pi / klen_in / np.tan(dtheta)
-    return period
-
-
-# ---------------------------------------------------------------------------
-#                     IO
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-#                  Get k mesh
-# ---------------------------------------------------------------------------
-
-def get_k_mesh_3d(number_x, number_y, number_z, delta_e_x, delta_e_y, delta_e_z):
-    # Get the corresponding energy mesh
-    energy_grid_x = np.linspace(start=- delta_e_x,
-                                stop=+ delta_e_x,
-                                num=number_x)
-    energy_grid_y = np.linspace(start=- delta_e_y,
-                                stop=+ delta_e_y,
-                                num=number_y)
-    energy_grid_z = np.linspace(start=- delta_e_z,
-                                stop=+ delta_e_z,
-                                num=number_z)
-
-    # Get the k grid
-    kx_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_x))
-    ky_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_y))
-    kz_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_z))
-
-    # Get the spatial mesh along x axis
-    dkx = kev_to_wave_number(energy=energy_grid_x[1] - energy_grid_x[0])
-    x_range = np.pi * 2 / dkx
-
-    x_idx = np.linspace(start=-x_range / 2., stop=x_range / 2., num=number_x)
-    x_idx_tick = ["{:.2f}".format(x) for x in x_idx]
-
-    # Get the spatial mesh along y axis
-    dky = kev_to_wave_number(energy=energy_grid_y[1] - energy_grid_y[0])
-    y_range = np.pi * 2 / dky
-
-    y_idx = np.linspace(start=-y_range / 2., stop=y_range / 2., num=number_y)
-    y_idx_tick = ["{:.2f}".format(x) for x in y_idx]
-
-    # Get the spatial mesh along z axis
-    dkz = kev_to_wave_number(energy=energy_grid_z[1] - energy_grid_z[0])
-    z_range = np.pi * 2 / dkz
-
-    z_idx = np.linspace(start=-z_range / 2., stop=z_range / 2., num=number_z)
-    z_idx_tick = ["{:.2f}".format(x) for x in z_idx]
-
-    # Assemble the indexes and labels
-    axis_info = {"x_range": x_range,
-                 "x_idx": x_idx,
-                 "x_idx_tick": x_idx_tick,
-                 "dkx": dkx,
-                 "energy_grid_x": energy_grid_x,
-
-                 "y_range": y_range,
-                 "y_idx": y_idx,
-                 "y_idx_tick": y_idx_tick,
-                 "dky": dky,
-                 "energy_grid_y": energy_grid_y,
-
-                 "z_range": z_range,
-                 "z_idx": z_idx,
-                 "z_idx_tick": z_idx_tick,
-                 "dkz": dkz,
-                 "energy_grid_z": energy_grid_z,
-                 "z_time_idx": np.divide(z_idx, c),
-                 "z_time_tick": ["{:.2f}".format(x) for x in np.divide(z_idx, c)],
-
-                 "de_x_in_meV": np.linspace(start=- delta_e_x * 1e6,
-                                            stop=+ delta_e_x * 1e6,
-                                            num=number_x)}
-    return kx_grid, ky_grid, kz_grid, axis_info
-
-
-# ---------------------------------------------------
-#              For DuMond Diagram
-# ---------------------------------------------------
-def get_klen_and_angular_mesh(k_num, theta_num, phi_num, energy_range, theta_range, phi_range):
-    # Get the corresponding energy mesh
-    energy_grid = np.linspace(start=energy_range[0], stop=energy_range[1], num=k_num)
-    # Get the k grid
-    klen_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid))
-
-    # Get theta grid
-    theta_grid = np.linspace(start=theta_range[0], stop=theta_range[1], num=theta_num)
-
-    # Get phi grid
-    phi_grid = np.linspace(start=phi_range[0], stop=phi_range[1], num=phi_num)
-
-    info_dict = {"energy_grid": energy_grid,
-                 "klen_grid": klen_grid,
-                 "theta_grid": theta_grid,
-                 "phi_grid": phi_grid}
-    return info_dict
-
-
-###############################################################################################
-###############################################################################################
-#
-#    The following code handle bragg reflectivity with cpu in details
-#
-###############################################################################################
-###############################################################################################
 def get_bragg_reflection_array(kin_grid, d, h, n,
                                chi0, chih_sigma, chihbar_sigma,
                                chih_pi, chihbar_pi):
@@ -430,106 +245,229 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     return reflect_s, reflect_p, b, kout_grid
 
 
-def get_rocking_curve(kin_list, crystal_list):
+# --------------------------------------------------------------
+#          Geometry functions
+# --------------------------------------------------------------
+def get_intersection(initial_position, k, normal, surface_point):
     """
-    Get the reflectivity for each kin.
+    Assume that a line starts from point s along the direction k. It will intersect with
+    the plane that passes through point x0 and has normal direction n. The function find the
+    resulted intersection point.
 
-    :param kin_list:
-    :param crystal_list:
+    This function assumes that the arguments are arrays of points.
+
+    :param initial_position: array of shape [3], starting points for each array
+    :param k: array of shape [3], the direction for each array
+    :param normal: array of shape [3], the normal direction of the surface
+    :param surface_point: array of shape [3], one point on this surface
     :return:
     """
-    k_num = kin_list.shape[0]
-    x_num = len(crystal_list)
+    # The intersection points for each array
+    x = np.copy(initial_position)
 
-    # Define some holder to save data
-    kout_list = []
-    reflect_p_list = []
-    reflect_s_list = []
-    reflect_p_total = np.ones(k_num, dtype=np.complex128)
-    reflect_s_total = np.ones(k_num, dtype=np.complex128)
-    b_total = np.ones(k_num, dtype=np.float64)
-
-    kout_tmp = np.copy(kin_list)
-    for x in range(x_num):
-        # Get info
-        (reflect_s_tmp,
-         reflect_p_tmp,
-         b_tmp,
-         kout_tmp) = get_bragg_reflection_array(kin_grid=kout_tmp,
-                                                d=crystal_list[x].d,
-                                                h=crystal_list[x].h,
-                                                n=crystal_list[x].normal,
-                                                chi0=crystal_list[x].chi0,
-                                                chih_sigma=crystal_list[x].chih_sigma,
-                                                chihbar_sigma=crystal_list[x].chihbar_sigma,
-                                                chih_pi=crystal_list[x].chih_pi,
-                                                chihbar_pi=crystal_list[x].chihbar_pi)
-        b_tmp = np.abs(b_tmp)
-
-        # Save info to holders
-        kout_list.append(np.copy(kout_tmp))
-        reflect_p_list.append(np.square(np.abs(reflect_p_tmp)) / b_tmp)
-        reflect_s_list.append(np.square(np.abs(reflect_s_tmp)) / b_tmp)
-
-        # Update the total reflectivity
-        reflect_s_total = np.multiply(reflect_s_total, reflect_s_tmp)
-        reflect_p_total = np.multiply(reflect_p_total, reflect_p_tmp)
-        b_total = np.multiply(b_total, b_tmp)
-
-    reflect_s_total = np.square(np.abs(reflect_s_total)) / b_total
-    reflect_p_total = np.square(np.abs(reflect_p_total)) / b_total
-
-    return reflect_s_total, reflect_p_total, reflect_s_list, reflect_p_list, kout_list
+    # Do the math
+    tmp = np.divide(np.dot(surface_point - initial_position, normal), np.dot(k, normal))
+    x += tmp * k
+    return x
 
 
-###############################################################################################
-###############################################################################################
-#
-#    The following code handle grating transmission with cpu
-#
-###############################################################################################
-###############################################################################################
-def get_square_grating_transmission(k, m, n, h, a, b, base=0.):
+# --------------------------------------------------------------
+#          Geometric operation
+# --------------------------------------------------------------
+def get_total_path_length(point_list):
     """
-    k: Wave number of the photon = 2 * pi * c / lambda
-    m: The order of diffraction
-    n: The complex refraction index.
-    h: The height of the tooth.
-    a: The width of the groove.
-    b: The width of the tooth.
+    Get the path length of a series of points
+
+    :param point_list:
+    :return:
+    """
+    number = len(point_list)
+    total_path = 0.
+    for l in range(number - 1):
+        total_path += l2_norm(point_list[l + 1] -
+                              point_list[l])
+
+    return total_path
+
+
+# ---------------------------------------------------------------------------
+#                     Grating
+# ---------------------------------------------------------------------------
+def get_grating_output_momentum(grating_wavenum, k_vec):
+    """
+    Calculate output momentum of the grating with the specified wave number and
+    the corresponding incident k_vec
+
+    :param grating_wavenum:
+    :param k_vec:
+    :return:
+    """
+    wavenum_reshape = np.reshape(grating_wavenum, (1, 3))
+    return k_vec + wavenum_reshape
+
+
+def get_grating_wavenumber_1d(direction, period, order):
     """
 
-    if not isinstance(m, int):
-        raise Exception("m is the order of diffraction. This value has to be an integer.")
-    if not isinstance(n, complex):
-        raise Exception("n is the complex refraction index. This value has to be a complex number.")
+    :param direction:
+    :param period:
+    :param order:
+    :return:
+    """
+    return order * direction * 2. * np.pi / period
 
-    # First consider diffractions that are not the zeroth order.
-    if m != 0:
-        # Get the real part and the imaginary part of the refraction coefficient
-        n_re = n.real - 1
-        n_im = n.imag
 
-        term_1 = 1 - np.exp(-k * h * n_im) * (np.cos(k * h * n_re) + 1.j * np.sin(k * h * n_re))
-        term_2 = 1 - np.cos(2 * np.pi * b * m / (a + b)) + np.sin(2 * np.pi * b * m / (a + b))
+def get_grating_period(dtheta, klen_in):
+    """
+    Derive the grating period based on the deviation angle and the incident wave number.
+    Here, one assume that the incident wave vector is perpendicular to the the grating surface.
 
-        transmission = np.square(np.abs(term_1 * term_2)) / (4 * (np.pi * m) ** 2)
-        transmission *= np.exp(- 2 * k * base * n_im)
+    :param dtheta:
+    :param klen_in:
+    :return:
+    """
+    period = 2 * np.pi / klen_in / np.tan(dtheta)
+    return period
 
-        # Then consider the zeroth order
-    else:
-        # Get the real part and the imaginary part of the refraction coefficicent
-        n_re = n.real - 1
-        n_im = n.imag
 
-        term_1 = (b + a * np.exp(-k * h * n_im) * (np.cos(k * h * n_re) +
-                                                   1.j * np.sin(k * h * n_re))) / (a + b)
+def get_square_grating_transmission(kin, height_vec, ab_ratio, base, refractive_index, order, grating_k):
+    # The argument for exp(ik(n-1)h)
+    nhk = np.dot(height_vec, kin).astype(np.complex128) * (refractive_index - complex(1.))
 
-        transmission = np.square(np.abs(term_1))
-        transmission *= np.exp(- 2 * k * base * n_im)
+    # The argument for exp(ik(n-1)t) for the phase different and absorption from
+    # the base of the grating
+    thick_k_n = np.dot(base, kin).astype(np.complex128) * (refractive_index - complex(1.))
 
-    return transmission
+    first_factor = complex(1.
+                           - np.cos(two_pi * order * ab_ratio),
+                           - np.sin(two_pi * order * ab_ratio))
+    second_factor = complex(1.) - complex(np.exp(-nhk.imag) * np.cos(nhk.real),
+                                          np.exp(-nhk.imag) * np.sin(nhk.real))
 
+    # Factor from the base
+    factor_base = complex(np.cos(thick_k_n.real) * np.exp(-thick_k_n.imag),
+                          np.sin(thick_k_n.real) * np.exp(-thick_k_n.imag))
+
+    factor = 1.j / complex(2. * np.pi * order) * first_factor * second_factor * factor_base
+
+    # Step 3: Update the momentum and the length of the momentum
+    kout = kin + order * grating_k
+    klen = l2_norm(kout)
+
+    return factor, kout, klen
+
+
+def get_square_grating_0th_transmission(kin, height_vec, refractive_index, ab_ratio, base):
+    # The argument for exp(ik(n-1)h)
+    nhk = np.dot(height_vec, kin).astype(np.complex128) * (refractive_index - complex(1.))
+
+    # The argument for exp(ik(n-1)t) for the phase different and absorption from
+    # the base of the grating
+    thick_k_n = np.dot(base, kin).astype(np.complex128) * (refractive_index - complex(1.))
+
+    # Factor from the base
+    factor_base = complex(np.cos(thick_k_n.real) * np.exp(-thick_k_n.imag),
+                          np.sin(thick_k_n.real) * np.exp(-thick_k_n.imag))
+
+    pre_factor = complex(1.) - complex(np.exp(-nhk.imag) * np.cos(nhk.real),
+                                       np.exp(-nhk.imag) * np.sin(nhk.real))
+
+    factor = (complex(1.) - complex(ab_ratio) * pre_factor) * factor_base
+
+    return factor
+
+
+# ---------------------------------------------------------------------------
+#                  Get k mesh
+# ---------------------------------------------------------------------------
+
+def get_k_mesh_3d(number_x, number_y, number_z, delta_e_x, delta_e_y, delta_e_z):
+    # Get the corresponding energy mesh
+    energy_grid_x = np.linspace(start=- delta_e_x,
+                                stop=+ delta_e_x,
+                                num=number_x)
+    energy_grid_y = np.linspace(start=- delta_e_y,
+                                stop=+ delta_e_y,
+                                num=number_y)
+    energy_grid_z = np.linspace(start=- delta_e_z,
+                                stop=+ delta_e_z,
+                                num=number_z)
+
+    # Get the k grid
+    kx_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_x))
+    ky_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_y))
+    kz_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_z))
+
+    # Get the spatial mesh along x axis
+    dkx = kev_to_wave_number(energy=energy_grid_x[1] - energy_grid_x[0])
+    x_range = np.pi * 2 / dkx
+
+    x_idx = np.linspace(start=-x_range / 2., stop=x_range / 2., num=number_x)
+    x_idx_tick = ["{:.2f}".format(x) for x in x_idx]
+
+    # Get the spatial mesh along y axis
+    dky = kev_to_wave_number(energy=energy_grid_y[1] - energy_grid_y[0])
+    y_range = np.pi * 2 / dky
+
+    y_idx = np.linspace(start=-y_range / 2., stop=y_range / 2., num=number_y)
+    y_idx_tick = ["{:.2f}".format(x) for x in y_idx]
+
+    # Get the spatial mesh along z axis
+    dkz = kev_to_wave_number(energy=energy_grid_z[1] - energy_grid_z[0])
+    z_range = np.pi * 2 / dkz
+
+    z_idx = np.linspace(start=-z_range / 2., stop=z_range / 2., num=number_z)
+    z_idx_tick = ["{:.2f}".format(x) for x in z_idx]
+
+    # Assemble the indexes and labels
+    axis_info = {"x_range": x_range,
+                 "x_idx": x_idx,
+                 "x_idx_tick": x_idx_tick,
+                 "dkx": dkx,
+                 "energy_grid_x": energy_grid_x,
+
+                 "y_range": y_range,
+                 "y_idx": y_idx,
+                 "y_idx_tick": y_idx_tick,
+                 "dky": dky,
+                 "energy_grid_y": energy_grid_y,
+
+                 "z_range": z_range,
+                 "z_idx": z_idx,
+                 "z_idx_tick": z_idx_tick,
+                 "dkz": dkz,
+                 "energy_grid_z": energy_grid_z,
+                 "z_time_idx": np.divide(z_idx, c),
+                 "z_time_tick": ["{:.2f}".format(x) for x in np.divide(z_idx, c)],
+
+                 "de_x_in_meV": np.linspace(start=- delta_e_x * 1e6,
+                                            stop=+ delta_e_x * 1e6,
+                                            num=number_x)}
+    return kx_grid, ky_grid, kz_grid, axis_info
+
+
+def get_klen_and_angular_mesh(k_num, theta_num, phi_num, energy_range, theta_range, phi_range):
+    # Get the corresponding energy mesh
+    energy_grid = np.linspace(start=energy_range[0], stop=energy_range[1], num=k_num)
+    # Get the k grid
+    klen_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid))
+
+    # Get theta grid
+    theta_grid = np.linspace(start=theta_range[0], stop=theta_range[1], num=theta_num)
+
+    # Get phi grid
+    phi_grid = np.linspace(start=phi_range[0], stop=phi_range[1], num=phi_num)
+
+    info_dict = {"energy_grid": energy_grid,
+                 "klen_grid": klen_grid,
+                 "theta_grid": theta_grid,
+                 "phi_grid": phi_grid}
+    return info_dict
+
+
+# ----------------------------------------------------------------------------
+#               For telescope
+# ----------------------------------------------------------------------------
 
 def get_telescope_kout(optical_axis, kin):
     """
@@ -563,8 +501,7 @@ def get_telescope_kout_list(optical_axis, kin):
     return kout
 
 
-def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_length,
-                                     get_object_distance=False):
+def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_length):
     """
     Get the image point after the telescope.
 
@@ -572,7 +509,6 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_
     :param lens_axis:
     :param lens_point:
     :param focal_length:
-    :param get_object_distance: If this value is set to True, then also return the object distance
     :return:
     """
 
@@ -589,3 +525,71 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_
     image_position -= image_vector
 
     return image_position
+
+
+# --------------------------------------------------------------------------------------------------------------
+#       Wrapper functions for different devices
+# --------------------------------------------------------------------------------------------------------------
+def get_kout(device, kin):
+    """
+    Get the output wave vector given the incident wave vector
+
+    :param device:
+    :param kin:
+    :return:
+    """
+    # Get output wave vector
+    if device.type == "Crystal: Bragg Reflection":
+        kout = get_bragg_kout(kin=kin,
+                              h=device.h,
+                              normal=device.normal)
+        return kout
+
+    if device.type == "Transmissive Grating":
+        kout = kin + device.momentum_transfer
+        return kout
+
+    if device.type == "Transmission Telescope for CPA":
+        kout = get_telescope_kout(optical_axis=device.lens_axis,
+                                  kin=kin)
+        return kout
+
+
+def get_intensity_efficiency(device, kin):
+    """
+    Get the output intensity efficiency for the given wave vector
+    assuming a monochromatic plane incident wave.
+
+    :param device:
+    :param kin:
+    :return:
+    """
+    # Get output wave vector
+    if device.type == "Crystal: Bragg Reflection":
+        kout = get_bragg_kout(kin=kin,
+                              h=device.h,
+                              normal=device.normal)
+        return kout
+
+    if device.type == "Transmissive Grating":
+
+        # Determine the grating order
+        if device.order == 0:
+            efficiency = get_square_grating_0th_transmission(kin=kin,
+                                                             height_vec=device.h,
+                                                             refractive_index=device.n,
+                                                             ab_ratio=device.ab_ratio,
+                                                             base=device.thick_vec)
+        else:
+            efficiency, _, _ = get_square_grating_transmission(kin=kin,
+                                                               height_vec=device.h,
+                                                               ab_ratio=device.ab_ratio,
+                                                               base=device.thick_vec,
+                                                               refractive_index=device.n,
+                                                               order=device.order,
+                                                               grating_k=device.momentum_transfer)
+        # Translate to the intensity efficiency
+        return np.square(np.abs(efficiency))
+
+    if device.type == "Transmission Telescope for CPA":
+        return device.efficiency

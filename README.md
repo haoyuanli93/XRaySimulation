@@ -12,6 +12,11 @@ the simulation of Laue and forward Bragg diffraction at
 present. Later in the future, I may include those case,
 however.
 
+# Notice
+In this repo, not all the functions are optimized.
+Functions in the GPU folder are optimized to some extend.
+Functions in the MultiDevice.py file are not optimized.
+
 # To-Do List
 
 1. Add automatic calculation of the electric susceptibility.
