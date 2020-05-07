@@ -1,7 +1,8 @@
 import numpy as np
 
-from XRaySimulation import util
-from XRaySimulation.util import get_bragg_reflection_array
+from XRaySimulation import util, misc
+
+two_pi = 2. * np.pi
 
 
 ####################################################
@@ -215,7 +216,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
     return intersection_list, kout_list
 
 
-def get_output_efficiency(device_list, kin):
+def get_intensity_efficiency_sigma_polarization(device_list, kin):
     """
     Get the reflectivity of this kin.
     Notice that this function is not particularly useful.
@@ -225,31 +226,27 @@ def get_output_efficiency(device_list, kin):
     :param kin:
     :return:
     """
-    efficiency_list = np.zeros(len(device_list), dtype=np.complex128)
+    efficiency_list = np.zeros(len(device_list), dtype=np.float64)
 
     # Variable for the kout
-    kout_list = np.zeros((len(device_list), 3), dtype=np.float64)
+    kout_list = np.zeros((len(device_list) + 1, 3), dtype=np.float64)
     kout_list[0] = kin[:]
 
     # Loop through all the devices
     for idx in range(len(device_list)):
-
         # Get the device
         device = device_list[idx]
 
         # Get the efficiency
+        efficiency_list[idx] = util.get_intensity_efficiency_sigma_polarization(device=device,
+                                                                                kin=kout_list[idx])
+        # Get the output wave vector
+        kout_list[idx + 1] = util.get_kout(device=device, kin=kout_list[idx])
 
-        # Get output wave vector
-        if device.type == "Crystal: Bragg Reflection":
-            kout_list[idx + 1] = util.get_bragg_kout(kin=kout_list[idx],
-                                                     h=device.h,
-                                                     normal=device.normal)
-        if device.type == "Transmissive Grating":
-            kout_list[idx + 1] = kout_list[-1] + device.momentum_transfer
+    # Get the overall efficiency
+    total_efficiency = np.prod(efficiency_list)
 
-        if device.type == "Transmission Telescope for CPA":
-            kout_list[idx + 1] = util.get_telescope_kout(optical_axis=device.lens_axis,
-                                                         kin=kout_list[idx])
+    return total_efficiency, efficiency_list, kout_list
 
 
 ####################################################
@@ -263,45 +260,105 @@ def get_output_efficiency_curve(device_list, kin_list):
     :param device_list:
     :return:
     """
-    k_num = kin_list.shape[0]
-    x_num = len(device_list)
+    d_num = len(device_list)  # number of devices
+    k_num = kin_list.shape[0]  # number of kin vectors
 
-    # Define some holder to save data
-    kout_list = []
-    reflect_p_list = []
-    reflect_s_list = []
-    reflect_p_total = np.ones(k_num, dtype=np.complex128)
-    reflect_s_total = np.ones(k_num, dtype=np.complex128)
-    b_total = np.ones(k_num, dtype=np.float64)
+    efficiency_holder = np.zeros((k_num, d_num))
+    kout_holder = np.zeros((k_num, d_num + 1, 3))
+    total_efficiency_holder = np.zeros(k_num)
 
-    kout_tmp = np.copy(kin_list)
-    for x in range(x_num):
-        # Get info
-        (reflect_s_tmp,
-         reflect_p_tmp,
-         b_tmp,
-         kout_tmp) = get_bragg_reflection_array(kin_grid=kout_tmp,
-                                                d=device_list[x].d,
-                                                h=device_list[x].h,
-                                                n=device_list[x].normal,
-                                                chi0=device_list[x].chi0,
-                                                chih_sigma=device_list[x].chih_sigma,
-                                                chihbar_sigma=device_list[x].chihbar_sigma,
-                                                chih_pi=device_list[x].chih_pi,
-                                                chihbar_pi=device_list[x].chihbar_pi)
-        b_tmp = np.abs(b_tmp)
+    # Loop through all the kin
+    for idx in range(k_num):
+        (total_efficiency,
+         efficiency_tmp,
+         kout_tmp) = get_intensity_efficiency_sigma_polarization(device_list=device_list,
+                                                                 kin=kin_list[idx])
 
-        # Save info to holders
-        kout_list.append(np.copy(kout_tmp))
-        reflect_p_list.append(np.square(np.abs(reflect_p_tmp)) / b_tmp)
-        reflect_s_list.append(np.square(np.abs(reflect_s_tmp)) / b_tmp)
+        efficiency_holder[idx, :] = efficiency_tmp[:]
+        kout_holder[idx, :, :] = kout_tmp[:, :]
+        total_efficiency_holder[idx] = total_efficiency
 
-        # Update the total reflectivity
-        reflect_s_total = np.multiply(reflect_s_total, reflect_s_tmp)
-        reflect_p_total = np.multiply(reflect_p_total, reflect_p_tmp)
-        b_total = np.multiply(b_total, b_tmp)
+    return total_efficiency_holder, efficiency_holder, kout_holder
 
-    reflect_s_total = np.square(np.abs(reflect_s_total)) / b_total
-    reflect_p_total = np.square(np.abs(reflect_p_total)) / b_total
 
-    return reflect_s_total, reflect_p_total, reflect_s_list, reflect_p_list, kout_list
+####################################################
+#       Align all the devices
+####################################################
+def align_devices(device_list,
+                  config_list,
+                  kin,
+                  searching_range=0.01,
+                  searching_number=10000):
+    """
+    This function aims to make the alignment procedure easier.
+
+    :param device_list: This is the list of devices.
+    :param config_list: This contains the geometry of the crystals.
+    :param kin:
+    :param searching_range: This is the searching range for the Bragg reflection around the geometric estimation.
+                            The default value is 0.1 rad
+    :param searching_number: The searching number in the searching range.
+    :return:
+    """
+    kout_list = [np.copy(kin)]
+    device_num = len(device_list)
+
+    for idx in range(device_num):
+        device = device_list[idx]
+
+        # The wave vector w.r.t which, the device should be aligned.
+        kout = kout_list[-1]
+
+        # Align the device
+        if device.type == "Crystal: Bragg Reflection":
+            # Align the reciprocal lattice with the incident wave vector
+            util.align_crystal_reciprocal_lattice(crystal=device,
+                                                  axis=kout)
+
+            # Estimate the Bragg angle
+            bragg_estimation = util.get_bragg_angle(wave_length=two_pi / util.l2_norm(kin),
+                                                    plane_distance=two_pi / device.h)
+
+            # Align the crystal to the estimated Bragg angle
+            rot_mat = util.rot_mat_in_yz_plane(theta=bragg_estimation * config_list[idx])
+            device.rotate_wrt_point(rot_mat=rot_mat,
+                                    ref_point=device.surface_point)
+
+            # Second: calculate the rocking curve around the estimated angle
+            (angles,
+             reflect_s,
+             reflect_p,
+             b_array,
+             kout_grid) = util.get_bragg_rocking_curve(kin=kout,
+                                                       scan_range=searching_range,
+                                                       scan_number=searching_number,
+                                                       h_initial=device.h,
+                                                       normal_initial=device.normal,
+                                                       thickness=device.d,
+                                                       chi0=device.chi0,
+                                                       chih_sigma=device.chih_sigma,
+                                                       chihbar_sigma=device.chihbar_sigma,
+                                                       chih_pi=device.chih_pi,
+                                                       chihbar_pi=device.chihbar_pi)
+
+            rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
+
+            # Third: find bandwidth of the rocking curve and the center of the rocking curve
+            fwhm, angle_adjust = misc.get_fwhm(coordinate=angles, curve_values=rocking_curve)
+
+            # Fourth: Align the crystal along that direction.
+            rot_mat = util.rot_mat_in_yz_plane(theta=angle_adjust)
+            device.rotate_wrt_point(rot_mat=rot_mat,
+                                    ref_point=device.surface_point)
+
+        if device.type == "Transmissive Grating":
+            # Get rotation angle:
+            util.align_grating_normal_direction(grating=device,
+                                                  axis=kout)
+
+        if device.type == "Transmission Telescope for CPA":
+            util.align_telescope_optical_axis(telescope=device,
+                                              axis=kout)
+
+        # Update the kout vector for the alignment of the next device
+        kout_list.append(util.get_kout(device=device, kin=kout))

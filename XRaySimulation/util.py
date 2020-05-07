@@ -88,8 +88,39 @@ def bandwidth_sigma_kev_to_duration_sigma_fs(bandwidth_kev):
 
 
 # --------------------------------------------------------------
+#          Rotation
+# --------------------------------------------------------------
+def rot_mat_in_yz_plane(theta):
+    """
+    Get a rotation matrix 3x3 for rotation around x axis
+    in the yz plane
+
+    :param theta:
+    :return:
+    """
+    rotmat = np.zeros((3, 3))
+    rotmat[0, 0] = 1.
+    rotmat[1, 1] = np.cos(theta)
+    rotmat[1, 2] = - np.sin(theta)
+    rotmat[2, 1] = np.sin(theta)
+    rotmat[2, 2] = np.cos(theta)
+
+    return rotmat
+
+
+# --------------------------------------------------------------
 #          For Bragg Reflection
 # --------------------------------------------------------------
+def get_bragg_angle(wave_length, plane_distance):
+    """
+    Return the estimated bragg angle according to the geometric Bragg law.
+    :param wave_length:
+    :param plane_distance:
+    :return:
+    """
+    return np.arcsin(wave_length / 2 * plane_distance)
+
+
 def get_bragg_kout(kin, h, normal):
     """
     This function produce the output wave vector from a Bragg reflection.
@@ -243,6 +274,143 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     reflect_p[mask] = bp[mask] * chih_pi * numerator[mask] / denominator[mask]
 
     return reflect_s, reflect_p, b, kout_grid
+
+
+def get_bragg_rocking_curve(kin, scan_range, scan_number, h_initial, normal_initial, thickness,
+                            chi0, chih_sigma, chihbar_sigma,
+                            chih_pi, chihbar_pi):
+    """
+
+    :param kin:
+    :param scan_range:
+    :param scan_number:
+    :param h_initial:
+    :param normal_initial:
+    :param thickness:
+    :param chi0:
+    :param chih_sigma:
+    :param chihbar_sigma:
+    :param chih_pi:
+    :param chihbar_pi:
+    :return:
+    """
+
+    # ------------------------------------------------------------
+    #          Step 0: Generate h_array and normal_array for the scanning
+    # ------------------------------------------------------------
+    h_array = np.zeros((scan_number, 3), dtype=np.float64)
+    normal_array = np.zeros((scan_number, 3), dtype=np.float64)
+
+    # Get the scanning angle
+    angles = np.linspace(start=-scan_range / 2, stop=scan_number / 2, num=scan_number)
+
+    for idx in range(scan_number):
+        h_array[idx] = rot_mat_in_yz_plane(theta=angles).dot(h_initial)
+        normal_array[idx] = rot_mat_in_yz_plane(theta=angles).dot(normal_initial)
+
+    # Create holder to save the reflectivity and output momentum
+    kout_grid = np.zeros_like(h_array, dtype=np.float64)
+
+    # ------------------------------------------------------------
+    #          Step 1: Get output momentum wave vector
+    # ------------------------------------------------------------
+    # Get some info to facilitate the calculation
+    klen = l2_norm(kin)
+    dot_hn = np.dot(h_initial, normal_initial)
+    h_square = l2_square(h_initial)
+
+    # Get gamma and alpha and b
+    dot_kn_grid = np.dot(normal_array, kin)
+    dot_kh_grid = np.dot(h_array, kin)
+
+    gamma_0 = dot_kn_grid / klen
+    gamma_h = (dot_kn_grid + dot_hn) / klen
+
+    b_array = np.divide(gamma_0, gamma_h)
+    b_list_cplx = b_array.astype(np.complex128)
+    alpha_array = (2 * dot_kh_grid + h_square) / np.square(klen)
+
+    # Get momentum tranfer
+    sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha_array)
+
+    mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
+    mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
+
+    m_trans = klen * (-gamma_h - sqrt_gamma_alpha)
+    m_trans[mask] = klen * (-gamma_h[mask] + sqrt_gamma_alpha[mask])
+
+    # Update the kout_grid
+    kout_grid[:, 0] = kin[0] + h_array[:, 0] + m_trans * normal_array[:, 0]
+    kout_grid[:, 1] = kin[1] + h_array[:, 1] + m_trans * normal_array[:, 1]
+    kout_grid[:, 2] = kin[2] + h_array[:, 2] + m_trans * normal_array[:, 2]
+
+    # ------------------------------------------------------------
+    # Step 2: Get the reflectivity for input sigma polarization
+    # ------------------------------------------------------------
+    # Get alpha tidle
+    alpha_tidle = (alpha_array * b_array + chi0 * (1. - b_array)) / 2.
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + chih_sigma * chihbar_sigma * b_list_cplx)
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen * thickness / gamma_0 * sqrt_a2_b2.real
+    im = klen * thickness / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    mask = np.zeros_like(im, dtype=np.bool)
+    mask[im <= 400] = True
+
+    reflect_s = chih_sigma * b_list_cplx / denominator
+    reflect_s[mask] = chih_sigma * b_list_cplx[mask] * numerator[mask] / denominator[mask]
+
+    # ------------------------------------------------------------
+    # Step 2: Get the reflectivity for pi polarization
+    # ------------------------------------------------------------
+
+    # Get the polarization factor with the asymmetric factor b.
+    p_value = np.dot(kout_grid, kin) / np.square(klen)
+    bp_array = b_list_cplx * p_value
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp_array * p_value * chih_pi * chihbar_pi)
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen * thickness / gamma_0 * sqrt_a2_b2.real
+    im = klen * thickness / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    mask = np.zeros_like(im, dtype=np.bool)
+    mask[im <= 400] = True
+
+    reflect_p = bp_array * chih_pi / denominator
+    reflect_p[mask] = bp_array[mask] * chih_pi * numerator[mask] / denominator[mask]
+
+    return angles, reflect_s, reflect_p, b_array, kout_grid
 
 
 # --------------------------------------------------------------
@@ -527,6 +695,56 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_
     return image_position
 
 
+# -------------------------------------------------------------
+#               Alignment
+# -------------------------------------------------------------
+def align_crystal_reciprocal_lattice(crystal, axis):
+    # 1 Get the angle
+    cos_val = np.dot(axis, crystal.h) / l2_norm(axis) / l2_norm(crystal.h)
+    rot_angle = np.arccos(cos_val)
+
+    # 2 Try the rotation
+    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
+    new_h = np.dot(rot_mat, crystal.h)
+
+    if np.dot(new_h, axis) < 0:
+        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
+
+    crystal.rotate_wrt_point(rot_mat=rot_mat,
+                             ref_point=crystal.surface_point)
+
+
+def align_grating_normal_direction(grating, axis):
+    # 1 Get the angle
+    cos_val = np.dot(axis, grating.normal) / l2_norm(axis) / l2_norm(grating.normal)
+    rot_angle = np.arccos(cos_val)
+
+    # 2 Try the rotation
+    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
+    new_h = np.dot(rot_mat, grating.normal)
+
+    if np.dot(new_h, axis) < 0:
+        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
+
+    grating.rotate_wrt_point(rot_mat=rot_mat,
+                             ref_point=grating.surface_point)
+
+
+def align_telescope_optical_axis(telescope, axis):
+    # 1 Get the angle
+    cos_val = np.dot(axis, telescope.lens_axis) / l2_norm(axis) / l2_norm(telescope.lens_axis)
+    rot_angle = np.arccos(cos_val)
+
+    # 2 Try the rotation
+    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
+    new_h = np.dot(rot_mat, telescope.lens_axis)
+
+    if np.dot(new_h, axis) < 0:
+        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
+
+    telescope.rotate_wrt_point(rot_mat=rot_mat,
+                               ref_point=telescope.lens_point)
+
 # --------------------------------------------------------------------------------------------------------------
 #       Wrapper functions for different devices
 # --------------------------------------------------------------------------------------------------------------
@@ -555,7 +773,7 @@ def get_kout(device, kin):
         return kout
 
 
-def get_intensity_efficiency(device, kin):
+def get_intensity_efficiency_sigma_polarization(device, kin):
     """
     Get the output intensity efficiency for the given wave vector
     assuming a monochromatic plane incident wave.
@@ -566,10 +784,24 @@ def get_intensity_efficiency(device, kin):
     """
     # Get output wave vector
     if device.type == "Crystal: Bragg Reflection":
-        kout = get_bragg_kout(kin=kin,
-                              h=device.h,
-                              normal=device.normal)
-        return kout
+        tmp = np.zeros((1, 3))
+        tmp[0, :] = kin
+
+        (reflect_s,
+         reflect_p,
+         b,
+         kout_grid) = get_bragg_reflection_array(kin_grid=tmp,
+                                                 d=device.thickness,
+                                                 h=device.h,
+                                                 n=device.normal,
+                                                 chi0=device.chi0,
+                                                 chih_sigma=device.chih_sigma,
+                                                 chihbar_sigma=device.chihbar_sigma,
+                                                 chih_pi=device.chih_pi,
+                                                 chihbar_pi=device.chihbar_pi)
+
+        efficiency = np.square(np.abs(reflect_s)) / np.abs(b)
+        return efficiency
 
     if device.type == "Transmissive Grating":
 

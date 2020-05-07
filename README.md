@@ -19,6 +19,16 @@ Functions in the MultiDevice.py file are not optimized.
 
 # To-Do List
 
+The following feature has not been implemented
+
 1. Add automatic calculation of the electric susceptibility.
 2. Add the bragg angle automatically.
 3. Add Add Gaussian smoothing to the FWHM function.  
+4. Add method to automatically calculate the chi values for different crystals.
+
+The following feature need to be improved
+
+1. The way to calculate the bragg angle in the MultiDevice.align_devices is not 
+ideal. I would like to find a better way and a more analytical way to find this 
+value.
+2. 

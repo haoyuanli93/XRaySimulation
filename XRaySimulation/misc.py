@@ -38,7 +38,7 @@ def time_stamp():
 ########################################################################################################################
 #                     Curve analysis
 ########################################################################################################################
-def get_fwhm(coordinate, curve_values):
+def get_fwhm(coordinate, curve_values, center=False):
     """
     Get the FWHM in the straightforward way.
     However, notice that, when one calculate the FWHM in this way, the result
@@ -46,6 +46,7 @@ def get_fwhm(coordinate, curve_values):
 
     :param coordinate:
     :param curve_values:
+    :param center: Whether return the coordinate of the center of the region within FWHM
     :return:
     """
     # Get the half max value
@@ -53,10 +54,26 @@ def get_fwhm(coordinate, curve_values):
 
     # Get the indexes for the range.
     indexes = np.arange(len(coordinate), dtype=np.int64)
-    indexes_above = indexes[curve_values >= half_max]
+    mask = np.zeros_like(indexes, dtype=np.bool)
+    mask[curve_values >= half_max] = True
+
+    indexes_above = indexes[mask]
 
     # Get the ends of the region
     left_idx = np.min(indexes_above)
     right_idx = np.max(indexes_above)
 
-    return coordinate[right_idx] - coordinate[left_idx]
+    # Convert the indexes into coordinates
+    fwhm = coordinate[right_idx] - coordinate[left_idx]
+
+    if center:
+        distribution = curve_values[mask]
+        distribution /= np.sum(distribution)
+
+        coordinate_roi = coordinate[mask]
+
+        mean = np.sum(np.multiply(distribution, coordinate_roi))
+
+        return fwhm, mean
+    else:
+        return fwhm
