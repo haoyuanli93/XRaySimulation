@@ -1,5 +1,7 @@
 import numpy as np
 
+from XRaySimulation import misc
+
 """
 This module is the lowest-level module. It does not depend on another modules.
 """
@@ -78,6 +80,14 @@ def petahertz_angular_frequency_to_wave_number(angular_frequency):
 
 def wave_number_to_kev(wavevec):
     return wavevec * hbar * c
+
+
+def sigma_to_fwhm(sigma):
+    return 2. * np.sqrt(2 * np.log(2)) * sigma
+
+
+def fwhm_to_sigma(fwhm):
+    return fwhm / (2. * np.sqrt(2 * np.log(2)))
 
 
 # --------------------------------------------------------------
@@ -714,6 +724,58 @@ def align_crystal_reciprocal_lattice(crystal, axis):
                              ref_point=crystal.surface_point)
 
 
+def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
+    ###########################
+    #   Align the recirpocal lattice with kin
+    ###########################
+    align_crystal_reciprocal_lattice(crystal=crystal, axis=kin)
+
+    ###########################
+    #   Alignment based on geometric theory of bragg diffraction
+    ###########################
+    # Estimate the Bragg angle
+    bragg_estimation = get_bragg_angle(wave_length=two_pi / l2_norm(kin),
+                                       plane_distance=two_pi / crystal.h)
+
+    # Align the crystal to the estimated Bragg angle
+    rot_mat = rot_mat_in_yz_plane(theta=bragg_estimation * rot_direction)
+    crystal.rotate_wrt_point(rot_mat=rot_mat,
+                             ref_point=crystal.surface_point)
+
+
+def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
+                                             scan_range=0.01, scan_number=10000, rocking_curve=False):
+    # Align the crystal with geometric bragg reflection theory
+    align_crystal_geometric_bragg_reflection(crystal=crystal, kin=kin, rot_direction=rot_direction)
+
+    # Align the crystal with dynamical diffraction theory
+    (angles,
+     reflect_s,
+     reflect_p,
+     b_array,
+     kout_grid) = get_bragg_rocking_curve(kin=kin,
+                                          scan_range=scan_range,
+                                          scan_number=scan_number,
+                                          h_initial=crystal.h,
+                                          normal_initial=crystal.normal,
+                                          thickness=crystal.d,
+                                          chi0=crystal.chi0,
+                                          chih_sigma=crystal.chih_sigma,
+                                          chihbar_sigma=crystal.chihbar_sigma,
+                                          chih_pi=crystal.chih_pi,
+                                          chihbar_pi=crystal.chihbar_pi)
+
+    rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
+
+    # Third: find bandwidth of the rocking curve and the center of the rocking curve
+    fwhm, angle_adjust = misc.get_fwhm(coordinate=angles, curve_values=rocking_curve)
+
+    # Fourth: Align the crystal along that direction.
+    rot_mat = rot_mat_in_yz_plane(theta=angle_adjust)
+    crystal.rotate_wrt_point(rot_mat=rot_mat,
+                             ref_point=crystal.surface_point)
+
+
 def align_grating_normal_direction(grating, axis):
     # 1 Get the angle
     cos_val = np.dot(axis, grating.normal) / l2_norm(axis) / l2_norm(grating.normal)
@@ -744,6 +806,7 @@ def align_telescope_optical_axis(telescope, axis):
 
     telescope.rotate_wrt_point(rot_mat=rot_mat,
                                ref_point=telescope.lens_point)
+
 
 # --------------------------------------------------------------------------------------------------------------
 #       Wrapper functions for different devices

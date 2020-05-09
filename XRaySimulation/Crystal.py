@@ -66,7 +66,7 @@ class CrystalBlock3D:
         self.chih_pi = chi_dict["chih_pi"]
 
         # hbar component of electric susceptibility's fourier transform
-        self.chihbar_pi = chi_dict["chibar_pi"]
+        self.chihbar_pi = chi_dict["chihbar_pi"]
 
         #############################
         # Second level of parameters. These parameters can be handy in the simulation_2019_11_5_2
