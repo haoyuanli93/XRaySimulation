@@ -6,7 +6,7 @@ from XRaySimulation import misc
 This module is the lowest-level module. It does not depend on another modules.
 """
 pi = np.pi
-two_pi = 2 * np.pi
+two_pi = 2. * np.pi
 
 hbar = 0.0006582119514  # This is the reduced planck constant in keV/fs
 
@@ -128,7 +128,7 @@ def get_bragg_angle(wave_length, plane_distance):
     :param plane_distance:
     :return:
     """
-    return np.arcsin(wave_length / 2 * plane_distance)
+    return np.arcsin(wave_length / (2. * plane_distance))
 
 
 def get_bragg_kout(kin, h, normal):
@@ -312,11 +312,12 @@ def get_bragg_rocking_curve(kin, scan_range, scan_number, h_initial, normal_init
     normal_array = np.zeros((scan_number, 3), dtype=np.float64)
 
     # Get the scanning angle
-    angles = np.linspace(start=-scan_range / 2, stop=scan_number / 2, num=scan_number)
+    angles = np.linspace(start=-scan_range / 2, stop=scan_range / 2, num=scan_number)
 
     for idx in range(scan_number):
-        h_array[idx] = rot_mat_in_yz_plane(theta=angles).dot(h_initial)
-        normal_array[idx] = rot_mat_in_yz_plane(theta=angles).dot(normal_initial)
+        rot_mat = rot_mat_in_yz_plane(theta=angles[idx])
+        h_array[idx] = rot_mat.dot(h_initial)
+        normal_array[idx] = rot_mat.dot(normal_initial)
 
     # Create holder to save the reflectivity and output momentum
     kout_grid = np.zeros_like(h_array, dtype=np.float64)
@@ -679,25 +680,25 @@ def get_telescope_kout_list(optical_axis, kin):
     return kout
 
 
-def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_length):
+def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_position, focal_length):
     """
     Get the image point after the telescope.
 
     :param object_point:
     :param lens_axis:
-    :param lens_point:
+    :param lens_position:
     :param focal_length:
     :return:
     """
 
     # Object position with respect to the lens
-    object_position = lens_point - object_point
+    object_position = lens_position - object_point
     object_distance = np.dot(lens_axis, object_position)
     image_vector = object_position - object_distance * lens_axis
 
     # Image position
     tmp_length = 4 * focal_length - object_distance
-    image_position = lens_point + tmp_length * lens_axis
+    image_position = lens_position + tmp_length * lens_axis
 
     # This is the image point of the source point.
     image_position -= image_vector
@@ -711,14 +712,18 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_point, focal_
 def align_crystal_reciprocal_lattice(crystal, axis):
     # 1 Get the angle
     cos_val = np.dot(axis, crystal.h) / l2_norm(axis) / l2_norm(crystal.h)
-    rot_angle = np.arccos(cos_val)
+    rot_angle = np.arccos(np.clip(cos_val, -1, 1))
+
+    # print("rot_angle:{:.2e}".format(np.rad2deg(rot_angle)))
 
     # 2 Try the rotation
     rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
     new_h = np.dot(rot_mat, crystal.h)
+    # print(new_h)
 
-    if np.dot(new_h, axis) < 0:
-        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
+    if np.dot(new_h, axis) / l2_norm(new_h) / l2_norm(crystal.h) < 0.999:
+        # print("aaa")
+        rot_mat = rot_mat_in_yz_plane(theta=-rot_angle)
 
     crystal.rotate_wrt_point(rot_mat=rot_mat,
                              ref_point=crystal.surface_point)
@@ -729,22 +734,27 @@ def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
     #   Align the recirpocal lattice with kin
     ###########################
     align_crystal_reciprocal_lattice(crystal=crystal, axis=kin)
+    # print(crystal.h)
 
     ###########################
     #   Alignment based on geometric theory of bragg diffraction
     ###########################
     # Estimate the Bragg angle
     bragg_estimation = get_bragg_angle(wave_length=two_pi / l2_norm(kin),
-                                       plane_distance=two_pi / crystal.h)
+                                       plane_distance=two_pi / l2_norm(crystal.h))
+
+    # print("Bragg angle:{:.2e}".format(np.rad2deg(bragg_estimation)))
 
     # Align the crystal to the estimated Bragg angle
-    rot_mat = rot_mat_in_yz_plane(theta=bragg_estimation * rot_direction)
+    rot_mat = rot_mat_in_yz_plane(theta=(bragg_estimation + np.pi / 2) * rot_direction)
+
     crystal.rotate_wrt_point(rot_mat=rot_mat,
                              ref_point=crystal.surface_point)
 
 
 def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
-                                             scan_range=0.01, scan_number=10000, rocking_curve=False):
+                                             scan_range=0.0005, scan_number=10000,
+                                             ):
     # Align the crystal with geometric bragg reflection theory
     align_crystal_geometric_bragg_reflection(crystal=crystal, kin=kin, rot_direction=rot_direction)
 
@@ -758,22 +768,26 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
                                           scan_number=scan_number,
                                           h_initial=crystal.h,
                                           normal_initial=crystal.normal,
-                                          thickness=crystal.d,
+                                          thickness=crystal.thickness,
                                           chi0=crystal.chi0,
                                           chih_sigma=crystal.chih_sigma,
                                           chihbar_sigma=crystal.chihbar_sigma,
                                           chih_pi=crystal.chih_pi,
                                           chihbar_pi=crystal.chihbar_pi)
 
-    rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
+    # rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
 
     # Third: find bandwidth of the rocking curve and the center of the rocking curve
-    fwhm, angle_adjust = misc.get_fwhm(coordinate=angles, curve_values=rocking_curve)
+    fwhm, angle_adjust = misc.get_fwhm(coordinate=angles,
+                                       curve_values=np.square(np.abs(reflect_s)),
+                                       center=True)
 
     # Fourth: Align the crystal along that direction.
     rot_mat = rot_mat_in_yz_plane(theta=angle_adjust)
     crystal.rotate_wrt_point(rot_mat=rot_mat,
                              ref_point=crystal.surface_point)
+
+    # return rocking_curve, angles
 
 
 def align_grating_normal_direction(grating, axis):
@@ -887,4 +901,4 @@ def get_intensity_efficiency_sigma_polarization(device, kin):
         return np.square(np.abs(efficiency))
 
     if device.type == "Transmission Telescope for CPA":
-        return device.efficiency
+        return np.square(np.abs(device.efficiency))

@@ -21,7 +21,7 @@ def get_kout(device_list, kin):
     # The reason to use is numpy array is that it's easy to determine the
     # total number of kouts generates and with numpy array, it might be more
     # efficient.
-    kout_list = np.zeros((len(device_list + 1), 3), dtype=np.float64)
+    kout_list = np.zeros((len(device_list) + 1, 3), dtype=np.float64)
     kout_list[0] = kin[:]
 
     for idx in range(len(device_list)):
@@ -72,7 +72,7 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
             intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
                                                            k=kout_list[-1],
                                                            normal=device.normal,
-                                                           surface_point=device_list.surface_point))
+                                                           surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
             path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
@@ -86,7 +86,7 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
             intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
                                                            k=kout_list[-1],
                                                            normal=device.normal,
-                                                           surface_point=device_list.surface_point))
+                                                           surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
             path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
@@ -97,11 +97,11 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
         if device.type == "Transmission Telescope for CPA":
             intersection_list.append(util.get_image_from_telescope_for_cpa(object_point=intersection_list[-1],
                                                                            lens_axis=device.lens_axis,
-                                                                           lens_point=device.lens_point,
+                                                                           lens_position=device.lens_position,
                                                                            focal_length=device.focal_length))
             # Find the path length
-            displacement = intersection_list[-1] - intersection_list[-2]
-            path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
+            # displacement = intersection_list[-1] - intersection_list[-2]
+            # path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
 
             # Find the output wave vector
             kout_list.append(util.get_telescope_kout(optical_axis=device.lens_axis,
@@ -157,7 +157,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
             intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
                                                            k=kout_list[-1],
                                                            normal=device.normal,
-                                                           surface_point=device_list.surface_point))
+                                                           surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
             path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
@@ -171,7 +171,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
             intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
                                                            k=kout_list[-1],
                                                            normal=device.normal,
-                                                           surface_point=device_list.surface_point))
+                                                           surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
             path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
@@ -184,12 +184,12 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
             intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
                                                            k=kout_list[-1],
                                                            normal=device.lens_axis,
-                                                           surface_point=device_list.lens_point))
+                                                           surface_point=device.lens_position))
 
             # Find the image
             image = util.get_image_from_telescope_for_cpa(object_point=intersection_list[-1],
                                                           lens_axis=device.lens_axis,
-                                                          lens_point=device.lens_point,
+                                                          lens_position=device.lens_position,
                                                           focal_length=device.focal_length)
 
             # Find the kout
@@ -197,7 +197,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
                                                      kin=kout_list[-1]))
 
             # Find the intersection on the second lens
-            point_on_seond_lens = device.lens_point + 2 * device.focal_length * device.lens_axis
+            point_on_seond_lens = device.lens_position + 2 * device.focal_length * device.lens_axis
             intersection_list.append(util.get_intersection(initial_position=image,
                                                            k=kout_list[-1],
                                                            normal=device.lens_axis,
@@ -279,5 +279,3 @@ def get_output_efficiency_curve(device_list, kin_list):
         total_efficiency_holder[idx] = total_efficiency
 
     return total_efficiency_holder, efficiency_holder, kout_holder
-
-
