@@ -1115,3 +1115,73 @@ def get_telescope_diffraction(kout_grid,
         output_position[idx, 0] -= image_vector_x
         output_position[idx, 1] -= image_vector_y
         output_position[idx, 2] -= image_vector_z
+
+
+@cuda.jit('void('
+          'complex128[:,:],'
+          'complex128[:,:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'complex128,'
+          'complex128,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64)')
+def get_1d_fresnel_diffraction(field_out,
+                               source,
+                               k_array,
+                               y_source_array,
+                               y_target_array,
+                               z_target_array,
+                               y_sampling,
+                               k_sampling,
+                               y_source_num,
+                               k_num,
+                               y_target_num,
+                               z_target_num):
+    # Calculate diffraction field at different distances in parallel
+    y_idx, z_idx = cuda.grid(2)
+
+    if z_idx < z_target_num and y_idx < y_target_num:
+        # Get an overall constant factor
+        overall_factor = complex(0.5 / math.sqrt(math.pi), -0.5 / math.sqrt(math.pi))
+
+        z = z_target_array[z_idx]
+        y = y_target_array[y_idx]
+
+        # Calculate the effect from different wave length
+        for k_idx in range(k_num):
+
+            # Get the factor associated with k and z
+            k = k_array[k_idx]
+
+            kz = k * z
+            kz_sqrt = math.sqrt(k / z)
+
+            kz_dependent_factor = complex(kz_sqrt * math.cos(kz),
+                                          kz_sqrt * math.sin(kz))
+
+            # Loop through the y source points
+            integral = complex(0.)
+            for y_source_idx in range(y_source_num):
+                # Get the phase angle
+                phase_angle = (y_source_array[y_source_idx] - y) ** 2
+                phase_angle *= k / 2. / z
+
+                # Get the phse
+                phase = complex(math.cos(phase_angle), math.sin(phase_angle))
+
+                # Add to the integration
+                integral += phase * source[y_source_idx, k_idx]
+
+            # Get the field
+            integral *= y_sampling * kz_dependent_factor
+
+            # Add this to the total output field
+            field_out[y_idx, z_idx] += integral * k_sampling
+
+        # Add the overall constant to the field
+        field_out[y_idx, z_idx] *= overall_factor

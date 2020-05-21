@@ -188,7 +188,8 @@ def get_diffraction_field(crystal_list,
                 if my_crystal.type == "Transmissive Grating":
                     GPUSingleDevice.add_vector[b_num, d_num](cuda_kin_grid,
                                                              cuda_kin_grid,
-                                                             - grating_orders[grating_idx] * my_crystal.base_wave_vector,
+                                                             - grating_orders[
+                                                                 grating_idx] * my_crystal.base_wave_vector,
                                                              number_z)
 
                     # Update the wave number
@@ -942,3 +943,91 @@ def get_diffraction_field_with_telescope(device_list,
                       "z_spec_2d": z_spec_2d}
 
     return result_3d_dict, result_2d_dict, check_dict
+
+
+def get_1d_fresnel_diffraction(source,
+                               k_array_initial,
+                               y_array_initial,
+                               z_array_final,
+                               y_array_final,
+                               d_num=16):
+    """
+    This function use gpu to calculate the fresnel diffraction from a simple lens.
+    Notice that in this function, 1D fresnel diffraction rather than 2D is utilized.
+
+    The reason is that,
+        1. 1D simulation is quicker
+        2. 1D case seems to be sufficient for many purposes
+        3. This is a stand alone project, I do not want to make it too complicated.
+
+    :param source:
+    :param k_array_initial:
+    :param y_array_initial:
+    :param z_array_final:
+    :param y_array_final:
+    :param d_num:
+    :return:
+    """
+    ############################################################################################################
+    # Step 1:   Get parameters and holders for the calculations
+    ############################################################################################################
+    y_sampling = complex(y_array_initial[1] - y_array_initial[0])
+    k_sampling = complex(k_array_initial[1] - k_array_initial[0])
+
+    y_source_num = y_array_initial.shape[0]
+    k_num = k_array_initial.shape[0]
+    y_target_num = y_array_final.shape[0]
+    z_target_num = z_array_final.shape[0]
+
+    field_out = np.zeros((y_target_num, z_target_num), dtype=np.complex128)
+
+    ###############################################
+    #   Move data to gpu
+    ###############################################
+    gpu_field_out = cuda.to_device(field_out)
+
+    gpu_k_array = cuda.to_device(np.ascontiguousarray(k_array_initial))
+    gpu_y_array = cuda.to_device(np.ascontiguousarray(y_array_initial))
+
+    gpu_y_array_final = cuda.to_device(np.ascontiguousarray(y_array_final))
+    gpu_z_array_final = cuda.to_device(np.ascontiguousarray(z_array_final))
+
+    gpu_source = cuda.to_device(np.ascontiguousarray(source))
+
+    ############################################################################################################
+    # Step 2:   Calculate the final field
+    ############################################################################################################
+    # d_num = 512
+    b_num_1 = (y_target_num + d_num - 1) // d_num
+    b_num_2 = (z_target_num + d_num - 1) // d_num
+
+    GPUSingleDevice.get_1d_fresnel_diffraction[(b_num_1, b_num_2),
+                                               (d_num, d_num)](gpu_field_out,
+                                                               gpu_source,
+                                                               gpu_k_array,
+                                                               gpu_y_array,
+                                                               gpu_y_array_final,
+                                                               gpu_z_array_final,
+                                                               y_sampling,
+                                                               k_sampling,
+                                                               y_source_num,
+                                                               k_num,
+                                                               y_target_num,
+                                                               z_target_num)
+
+    gpu_field_out.to_host()
+    return field_out
+
+
+########################################################################################################################
+#       This is for SASE simulation where everything happens in the reciprocal space
+########################################################################################################################
+def get_diffraction_field_reciprocal_space(kin_grid,
+                                           device_list,
+                                           total_path,
+                                           observation,
+                                           my_pulse,
+                                           pulse_delay_time,
+                                           pulse_k0_final,
+                                           d_num=512):
+    pass

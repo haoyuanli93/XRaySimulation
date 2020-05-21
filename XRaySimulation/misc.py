@@ -77,3 +77,18 @@ def get_fwhm(coordinate, curve_values, center=False):
         return fwhm, mean
     else:
         return fwhm
+
+
+def get_gaussian_fit(curve, coordinate):
+    total = np.sum(curve)
+    distribution = curve / total
+
+    mean = np.sum(np.multiply(distribution, coordinate))
+    std = np.sum(np.multiply(distribution, np.square(coordinate))) - mean ** 2
+    std = np.sqrt(std)
+
+    gaussian_fit = np.exp(- np.square(coordinate - mean) / 2. / std ** 2)
+    gaussian_fit /= np.sum(gaussian_fit)
+
+    gaussian_fit *= total
+    return gaussian_fit

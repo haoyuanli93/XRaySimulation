@@ -1,5 +1,4 @@
 import numpy as np
-
 from XRaySimulation import misc
 
 """
@@ -902,3 +901,5 @@ def get_intensity_efficiency_sigma_polarization(device, kin):
 
     if device.type == "Transmission Telescope for CPA":
         return np.square(np.abs(device.efficiency))
+
+
