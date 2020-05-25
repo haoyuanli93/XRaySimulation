@@ -4,6 +4,7 @@ import numpy as np
 from numba import cuda
 from pyculib import fft as cufft
 
+from XRaySimulation import util
 from XRaySimulation.GPU import GPUSingleDevice
 
 
@@ -1022,12 +1023,221 @@ def get_1d_fresnel_diffraction(source,
 ########################################################################################################################
 #       This is for SASE simulation where everything happens in the reciprocal space
 ########################################################################################################################
-def get_diffraction_field_reciprocal_space(kin_grid,
-                                           device_list,
-                                           total_path,
-                                           observation,
-                                           my_pulse,
-                                           pulse_delay_time,
-                                           pulse_k0_final,
-                                           d_num=512):
-    pass
+"""
+This is a difficult simulation. It's very difficult to find a general solution.
+Therefore, I decided to write the simulation is a lazy way.
+
+i.e. I only calculate the output component and the wave vector grid.
+"""
+
+
+def get_diffracted_monochromatic_components(k_grid,
+                                            device_list,
+                                            total_path,
+                                            observation,
+                                            my_pulse,
+                                            pulse_k0_final,
+                                            d_num=512):
+    ############################################################################################################
+    # ----------------------------------------------------------------------------------------------------------
+    #
+    #                      Step 1: Create holders and get prepared for the simulation
+    #
+    # ----------------------------------------------------------------------------------------------------------
+    ############################################################################################################
+    device_num = len(device_list)
+
+    # Get meta data
+    k_num = k_grid.shape[0]
+
+    tic = time.time()
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #  Various intersection points, path length and phase
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    intersect_points = np.ascontiguousarray(np.zeros((k_num, 3), dtype=np.float64))
+    intersect_points[:, 0] = my_pulse.x0[0]
+    intersect_points[:, 1] = my_pulse.x0[1]
+    intersect_points[:, 2] = my_pulse.x0[2]
+
+    component_final_points = np.ascontiguousarray(np.zeros((k_num, 3), dtype=np.float64))
+    remaining_length = np.ascontiguousarray(np.zeros(k_num, dtype=np.float64) + total_path)
+    phase_grid = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+    jacobian_grid = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+
+    cuda_intersect = cuda.to_device(intersect_points)
+    cuda_final_points = cuda.to_device(component_final_points)
+    cuda_remain_path = cuda.to_device(remaining_length)
+    cuda_phase = cuda.to_device(phase_grid)
+    cuda_jacobian = cuda.to_device(jacobian_grid)
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # [1D slices] reflect and time response
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    reflect_pi = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+    reflect_total_pi = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+    reflect_sigma = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+    reflect_total_sigma = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+
+    cuda_reflect_pi = cuda.to_device(reflect_pi)
+    cuda_reflect_total_pi = cuda.to_device(reflect_total_pi)
+    cuda_reflect_sigma = cuda.to_device(reflect_sigma)
+    cuda_reflect_total_sigma = cuda.to_device(reflect_total_sigma)
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # [1D slices] Vector field
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # The reciprocal space
+    vector_spec_holder = np.ascontiguousarray(np.zeros((k_num, 3), dtype=np.complex128))
+
+    cuda_spec_vec = cuda.to_device(vector_spec_holder)
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #  [1D slices] k grid
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    kin_grid = np.ascontiguousarray(np.zeros_like(k_grid, dtype=np.float64))
+    klen_grid = np.ascontiguousarray(util.l2_norm_batch(kin_grid))
+
+    cuda_kin_grid = cuda.to_device(kin_grid)
+    cuda_klen_grid = cuda.to_device(klen_grid)
+
+    toc = time.time()
+    print("It takes {:.2f} seconds to prepare the variables.".format(toc - tic))
+
+    ############################################################################################################
+    # ----------------------------------------------------------------------------------------------------------
+    #
+    #                           Step 2: Calculate the field and save the data
+    #
+    # ----------------------------------------------------------------------------------------------------------
+    ############################################################################################################
+    # d_num = 512
+    b_num = (k_num + d_num - 1) // d_num
+
+    # --------------------------------------------------------------------
+    #  Step 7. Forward propagation
+    # --------------------------------------------------------------------
+    for device_idx in range(device_num):
+        my_device = device_list[device_idx]
+        if my_device.type == "Transmission Telescope for CPA":
+            # Get the intersection point from the previous intersection point
+            GPUSingleDevice.get_telescope_diffraction[b_num, d_num](cuda_kin_grid,
+                                                                    cuda_spec_vec,
+                                                                    cuda_intersect,
+                                                                    cuda_kin_grid,
+                                                                    cuda_intersect,
+                                                                    my_device.lens_axis,
+                                                                    my_device.focal_length,
+                                                                    my_device.lens_position,
+                                                                    my_device.efficiency,
+                                                                    k_num)
+
+        if my_device.type == "Crystal: Bragg Reflection":
+            # Get the intersection point from the previous intersection point
+            GPUSingleDevice.get_intersection_point[b_num, d_num](cuda_remain_path,
+                                                                 cuda_intersect,
+                                                                 cuda_kin_grid,
+                                                                 cuda_klen_grid,
+                                                                 cuda_remain_path,
+                                                                 cuda_intersect,
+                                                                 my_device.surface_point,
+                                                                 my_device.normal,
+                                                                 k_num)
+
+            # Get the reflectivity
+            GPUSingleDevice.get_bragg_reflection[b_num, d_num](cuda_reflect_sigma,
+                                                               cuda_reflect_pi,
+                                                               cuda_kin_grid,
+                                                               cuda_spec_vec,
+                                                               cuda_jacobian,
+                                                               cuda_klen_grid,
+                                                               cuda_kin_grid,
+                                                               my_device.thickness,
+                                                               my_device.h,
+                                                               my_device.normal,
+                                                               my_device.dot_hn,
+                                                               my_device.h_square,
+                                                               my_device.chi0,
+                                                               my_device.chih_sigma,
+                                                               my_device.chihbar_sigma,
+                                                               my_device.chih_pi,
+                                                               my_device.chihbar_pi,
+                                                               k_num)
+
+            GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_reflect_sigma,
+                                                                         cuda_reflect_total_sigma,
+                                                                         cuda_reflect_total_sigma,
+                                                                         k_num)
+
+            GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_reflect_pi,
+                                                                         cuda_reflect_total_pi,
+                                                                         cuda_reflect_total_pi,
+                                                                         k_num)
+    # --------------------------------------------------------------------
+    #  Step 8. Get the propagation phase
+    # --------------------------------------------------------------------
+    GPUSingleDevice.get_final_point[b_num, d_num](cuda_final_points,
+                                                  cuda_intersect,
+                                                  cuda_kin_grid,
+                                                  cuda_klen_grid,
+                                                  cuda_remain_path,
+                                                  k_num)
+
+    # Get the propagational phase from the inital phase.
+    GPUSingleDevice.get_relative_spatial_phase[b_num, d_num](cuda_phase,
+                                                             cuda_final_points,
+                                                             observation,
+                                                             cuda_kin_grid,
+                                                             pulse_k0_final,
+                                                             k_num)
+
+    # Add the phase
+    GPUSingleDevice.scalar_vector_elementwise_multiply_complex[b_num, d_num](cuda_phase,
+                                                                             cuda_spec_vec,
+                                                                             cuda_spec_vec,
+                                                                             k_num)
+
+    # Add the jacobian
+    GPUSingleDevice.scalar_vector_elementwise_multiply_complex[b_num, d_num](cuda_jacobian,
+                                                                             cuda_spec_vec,
+                                                                             cuda_spec_vec,
+                                                                             k_num)
+
+    ###################################################################################################
+    #                                  Finish
+    ###################################################################################################
+    cuda_spec_vec.to_host()
+
+    # Move the arrays back to the device for debugging.
+    cuda_final_points.to_host()
+    cuda_remain_path.to_host()
+    cuda_intersect.to_host()
+    cuda_phase.to_host()
+
+    cuda_kin_grid.to_host()
+    cuda_klen_grid.to_host()
+
+    cuda_reflect_pi.to_host()
+    cuda_reflect_sigma.to_host()
+    cuda_reflect_total_pi.to_host()
+    cuda_reflect_total_sigma.to_host()
+
+    # Create result dictionary
+
+    sanity_check = {"intersect_points": intersect_points,
+                    "component_final_points": component_final_points,
+                    "remaining_length": remaining_length,
+                    "phase_grid": phase_grid,
+                    "final_point": component_final_points,
+                    "jacob_grid": jacobian_grid,
+                    }
+
+    reflectivity_holder = {"reflectivity_pi": reflect_pi,
+                           "reflectivity_sigma": reflect_sigma,
+                           "reflectivity_pi_tot": reflect_total_pi,
+                           "reflectivity_sigma_tot": reflect_total_sigma,
+                           }
+
+    field_holder = {"final spectrum": vector_spec_holder}
+
+    return field_holder, reflectivity_holder, sanity_check
