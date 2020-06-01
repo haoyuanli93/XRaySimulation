@@ -492,7 +492,7 @@ def get_bragg_reflection(reflectivity_sigma, reflectivity_pi, kout_grid, efield_
         efield_grid[idx, 2] = efield_out_sigma_z + efield_out_pi_z
 
 
-@cuda.jit('void(complex128[:], complex128[:], float64[:,:], complex128[:,:], float64[:],'
+@cuda.jit('void(complex128[:], complex128[:], float64[:,:], complex128[:,:], complex128[:],'
           'float64[:], float64[:,:],'
           'float64, float64[:], float64[:],'
           'float64, float64,'
@@ -714,6 +714,256 @@ def get_bragg_reflection_with_jacobian(reflectivity_sigma, reflectivity_pi, kout
         efield_grid[idx, 0] = efield_out_sigma_x + efield_out_pi_x
         efield_grid[idx, 1] = efield_out_sigma_y + efield_out_pi_y
         efield_grid[idx, 2] = efield_out_sigma_z + efield_out_pi_z
+
+
+@cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
+          'float64[:], float64[:,:],'
+          'float64, float64[:], float64[:],'
+          'float64, float64,'
+          'complex128, complex128, complex128,'
+          'int64)')
+def get_bragg_reflection_sigma_polarization(reflectivity_sigma,
+                                            kout_grid,
+                                            efield_grid,
+                                            jacobian,
+                                            klen_grid,
+                                            kin_grid,
+                                            d,
+                                            h,
+                                            n,
+                                            dot_hn,
+                                            h_square,
+                                            chi0, chih_sigma,
+                                            chihbar_sigma, num):
+    """
+    Given the crystal info, the input electric field, this function returns the
+    reflectivity for the sigma polarization and pi polarization and the
+    diffracted electric field.
+
+    :param reflectivity_sigma:
+    :param kout_grid:
+    :param efield_grid:
+    :param jacobian:
+    :param klen_grid:
+    :param kin_grid:
+    :param d:
+    :param h:
+    :param n:
+    :param dot_hn:
+    :param h_square:
+    :param chi0:
+    :param chih_sigma:
+    :param chihbar_sigma:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+
+        #####################################################################################################
+        # Step 1: Get parameters for reflectivity and decompose input field
+        #####################################################################################################
+        # ------------------------------------
+        #     Get the diffracted wave number
+        # ------------------------------------
+        # Get k components
+        kin_x = kin_grid[idx, 0]
+        kin_y = kin_grid[idx, 1]
+        kin_z = kin_grid[idx, 2]
+        klen = klen_grid[idx]
+
+        # Get gamma and alpha and b
+        dot_kn = kin_x * n[0] + kin_y * n[1] + kin_z * n[2]
+        dot_kh = kin_x * h[0] + kin_y * h[1] + kin_z * h[2]
+
+        gamma_0 = dot_kn / klen
+        gamma_h = (dot_kn + dot_hn) / klen
+        b = gamma_0 / gamma_h
+        b_complex = complex(b)
+        alpha = (2 * dot_kh + h_square) / (klen ** 2)
+
+        # Get momentum tranfer
+        sqrt_gamma_alpha = math.sqrt(gamma_h ** 2 - alpha)
+        m_trans = klen * (-gamma_h - sqrt_gamma_alpha)
+
+        # Get output wave vector
+        kout_x = kin_x + h[0] + m_trans * n[0]
+        kout_y = kin_y + h[1] + m_trans * n[1]
+        kout_z = kin_z + h[2] + m_trans * n[2]
+
+        # Update the kout_grid
+        kout_grid[idx, 0] = kout_x
+        kout_grid[idx, 1] = kout_y
+        kout_grid[idx, 2] = kout_z
+
+        # Get the jacobian :   dot(kout, n) / dot(kin, n)
+        jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
+
+        #####################################################################################################
+        # Step 2: Get the reflectivity and field
+        #####################################################################################################
+        # Get alpha tidle
+        alpha_tidle = complex((alpha * b + chi0.real * (1. - b)) / 2., chi0.imag * (1. - b) / 2.)
+
+        # Get sqrt(alpha**2 + beta**2) value
+        sqrt_a2_b2 = cmath.sqrt(alpha_tidle ** 2 + b_complex * chih_sigma * chihbar_sigma)
+
+        if sqrt_a2_b2.imag < 0:
+            sqrt_a2_b2 = - sqrt_a2_b2
+
+        # Calculate the phase term
+        re = klen * d / gamma_0 * sqrt_a2_b2.real
+        im = klen * d / gamma_0 * sqrt_a2_b2.imag
+
+        # Take care of the exponential
+        if im <= 400.:
+            magnitude = complex(math.exp(-im))
+
+            phase = complex(math.cos(re), math.sin(re))
+            # Calculate some intermediate part
+            numerator = 1. - magnitude * phase
+            denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+            # Assemble everything
+            reflectivity_sigma[idx] = b_complex * chih_sigma * numerator / denominator
+        else:
+            # When the crystal is super thick, the numerator becomes 1 The exponential term becomes 0.
+            # Calculate some intermediate part
+            denominator = alpha_tidle + sqrt_a2_b2
+
+            # Assemble everything
+            reflectivity_sigma[idx] = b_complex * chih_sigma / denominator
+
+        # Get the field
+        efield_grid[idx] *= reflectivity_sigma[idx]
+
+
+@cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
+          'float64[:], float64[:,:],'
+          'float64, float64[:], float64[:],'
+          'float64, float64,'
+          'complex128, complex128,  complex128,'
+          'int64)')
+def get_bragg_reflection_pi_polarization(reflectivity_pi,
+                                         kout_grid,
+                                         efield_grid,
+                                         jacobian,
+                                         klen_grid,
+                                         kin_grid,
+                                         d,
+                                         h,
+                                         n,
+                                         dot_hn,
+                                         h_square,
+                                         chi0, chih_pi,
+                                         chihbar_pi, num):
+    """
+    Given the crystal info, the input electric field, this function returns the
+    reflectivity for the sigma polarization and pi polarization and the
+    diffracted electric field.
+
+    :param reflectivity_pi:
+    :param kout_grid:
+    :param efield_grid:
+    :param jacobian:
+    :param klen_grid:
+    :param kin_grid:
+    :param d:
+    :param h:
+    :param n:
+    :param dot_hn:
+    :param h_square:
+    :param chi0:
+    :param chih_pi:
+    :param chihbar_pi:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+
+        #####################################################################################################
+        # Step 1: Get parameters for reflectivity and decompose input field
+        #####################################################################################################
+        # ------------------------------------
+        #     Get the diffracted wave number
+        # ------------------------------------
+        # Get k components
+        kin_x = kin_grid[idx, 0]
+        kin_y = kin_grid[idx, 1]
+        kin_z = kin_grid[idx, 2]
+        klen = klen_grid[idx]
+
+        # Get gamma and alpha and b
+        dot_kn = kin_x * n[0] + kin_y * n[1] + kin_z * n[2]
+        dot_kh = kin_x * h[0] + kin_y * h[1] + kin_z * h[2]
+
+        gamma_0 = dot_kn / klen
+        gamma_h = (dot_kn + dot_hn) / klen
+        b = gamma_0 / gamma_h
+        b_complex = complex(b)
+        alpha = (2 * dot_kh + h_square) / (klen ** 2)
+
+        # Get momentum tranfer
+        sqrt_gamma_alpha = math.sqrt(gamma_h ** 2 - alpha)
+        m_trans = klen * (-gamma_h - sqrt_gamma_alpha)
+
+        # Get output wave vector
+        kout_x = kin_x + h[0] + m_trans * n[0]
+        kout_y = kin_y + h[1] + m_trans * n[1]
+        kout_z = kin_z + h[2] + m_trans * n[2]
+
+        # Update the kout_grid
+        kout_grid[idx, 0] = kout_x
+        kout_grid[idx, 1] = kout_y
+        kout_grid[idx, 2] = kout_z
+
+        # Get the jacobian :   dot(kout, n) / dot(kin, n)
+        jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
+
+        #####################################################################################################
+        # Step 2: Get the reflectivity
+        #####################################################################################################
+        # Get alpha tidle
+        alpha_tidle = complex((alpha * b + chi0.real * (1. - b)) / 2., chi0.imag * (1. - b) / 2.)
+
+        # Get the polarization factor with the asymmetric factor b.
+        p_value = complex((kout_x * kin_x +
+                           kout_y * kin_y +
+                           kout_z * kin_z) / (klen ** 2))
+        bp = b_complex * p_value
+
+        # Get sqrt(alpha**2 + beta**2) value
+        sqrt_a2_b2 = cmath.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
+
+        # Because this is a thick crystal, only one mode will be activated.
+        if sqrt_a2_b2.imag < 0.:
+            # Because only one mode is activated,
+            sqrt_a2_b2 = - sqrt_a2_b2
+
+        # Calculate the phase term
+        re = klen * d / gamma_0 * sqrt_a2_b2.real
+        im = klen * d / gamma_0 * sqrt_a2_b2.imag
+
+        # Take care of the exponential
+        if im <= 400.:
+            magnitude = complex(math.exp(-im))
+            phase = complex(math.cos(re), math.sin(re))
+
+            # Calculate some intermediate part
+            numerator = complex(1.) - magnitude * phase
+            denominator = alpha_tidle * numerator + sqrt_a2_b2 * (complex(2.) - numerator)
+            # Assemble everything
+            reflectivity_pi[idx] = bp * chih_pi * numerator / denominator
+
+        else:
+            # Calculate some intermediate part
+            denominator = alpha_tidle + sqrt_a2_b2
+            # Assemble everything
+            reflectivity_pi[idx] = bp * chih_pi / denominator
+
+        # Get the field
+        efield_grid[idx] *= reflectivity_pi[idx]
 
 
 ###################################################################################################
@@ -1312,6 +1562,84 @@ def get_telescope_diffraction(kout_grid,
         efield_grid[idx, 0] *= efficiency
         efield_grid[idx, 1] *= efficiency
         efield_grid[idx, 2] *= efficiency
+
+        #######################################################################
+        # Change of the position for the phase calculation
+        #######################################################################
+        # Object position
+        tmp_x = telescope_position[0] - input_position[idx, 0]
+        tmp_y = telescope_position[1] - input_position[idx, 1]
+        tmp_z = telescope_position[2] - input_position[idx, 2]
+
+        object_distance_1 = (tmp_x * optical_axis[0] +
+                             tmp_y * optical_axis[1] +
+                             tmp_z * optical_axis[2])
+
+        image_vector_x = tmp_x - object_distance_1 * optical_axis[0]
+        image_vector_y = tmp_y - object_distance_1 * optical_axis[1]
+        image_vector_z = tmp_z - object_distance_1 * optical_axis[2]
+
+        # Image position
+        tmp_length = 4 * focal_length - object_distance_1
+        output_position[idx, 0] = telescope_position[0] + tmp_length * optical_axis[0]
+        output_position[idx, 1] = telescope_position[1] + tmp_length * optical_axis[1]
+        output_position[idx, 2] = telescope_position[2] + tmp_length * optical_axis[2]
+
+        # Change the image position due to the deviation from the optical axis
+        output_position[idx, 0] -= image_vector_x
+        output_position[idx, 1] -= image_vector_y
+        output_position[idx, 2] -= image_vector_z
+
+
+@cuda.jit('void('
+          'float64[:,:],'
+          'complex128[:],'
+          'float64[:,:],'
+          'float64[:,:],'
+          'float64[:,:],'
+          'float64[:],'
+          'float64,'
+          'float64[:],'
+          'complex128,'
+          'int64)')
+def get_telescope_scalar_diffraction(kout_grid,
+                                     efield_grid,
+                                     output_position,
+                                     kin_grid,
+                                     input_position,
+                                     optical_axis,
+                                     focal_length,
+                                     telescope_position,
+                                     efficiency,
+                                     num):
+    """
+    This function update the information for the diffraction from the telescope
+
+    :param kout_grid:
+    :param efield_grid:
+    :param output_position:
+    :param kin_grid:
+    :param input_position:
+    :param optical_axis:
+    :param focal_length:
+    :param telescope_position:
+    :param efficiency:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        # Update the wave vector
+        k_parallel = (kin_grid[idx, 0] * optical_axis[0] +
+                      kin_grid[idx, 1] * optical_axis[1] +
+                      kin_grid[idx, 2] * optical_axis[2])
+
+        kout_grid[idx, 0] = 2 * k_parallel * optical_axis[0] - kin_grid[idx, 0]
+        kout_grid[idx, 1] = 2 * k_parallel * optical_axis[1] - kin_grid[idx, 1]
+        kout_grid[idx, 2] = 2 * k_parallel * optical_axis[2] - kin_grid[idx, 2]
+
+        # Transmission of the electric field
+        efield_grid[idx] *= efficiency
 
         #######################################################################
         # Change of the position for the phase calculation
