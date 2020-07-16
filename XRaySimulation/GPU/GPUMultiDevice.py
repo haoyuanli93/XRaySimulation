@@ -1218,6 +1218,8 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     cuda_reflect_sigma.to_host()
     cuda_reflect_total_sigma.to_host()
 
+    cuda_jacobian.to_host()
+
     # Create result dictionary
 
     sanity_check = {"intersect_points": intersect_points,
