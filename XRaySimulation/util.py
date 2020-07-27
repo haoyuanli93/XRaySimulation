@@ -624,6 +624,49 @@ def get_k_mesh_3d(number_x, number_y, number_z, delta_e_x, delta_e_y, delta_e_z)
     return kx_grid, ky_grid, kz_grid, axis_info
 
 
+def get_k_mesh_1d(number, energy_range):
+    """
+    Get a (n,3) numpy array as the wave vector array.
+
+    Here, the output[:,2] contains non-zero values.
+    I.e. I assume that the propagation direction is along z direction.
+
+    :param number:
+    :param energy_range:
+    :return:
+    """
+    # Get the corresponding energy mesh
+    energy_grid_z = np.linspace(start=- energy_range,
+                                stop=+ energy_range,
+                                num=number)
+
+    # Get the k grid
+    kz_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_z))
+
+    # Get a wave vector array
+    k_grid = np.zeros((kz_grid.shape[0], 3), dtype=np.float64)
+    k_grid[:,2] = kz_grid[:]
+
+    # Get the spatial mesh along z axis
+    dkz = kev_to_wave_number(energy=energy_grid_z[1] - energy_grid_z[0])
+    z_range = np.pi * 2 / dkz
+
+    z_idx = np.linspace(start=-z_range / 2., stop=z_range / 2., num=number)
+    z_idx_tick = ["{:.2f}".format(x) for x in z_idx]
+
+    # Assemble the indexes and labels
+    axis_info = {"spatial_range": z_range,
+                 "spatial_grid": z_idx,
+                 "spatial_grid_tick": z_idx_tick,
+                 "dkz": dkz,
+                 "energy_grid": energy_grid_z,
+                 "time_grid": np.divide(z_idx, c),
+                 "time_grid_tick": ["{:.2f}".format(x) for x in np.divide(z_idx, c)],
+                 }
+
+    return k_grid, axis_info
+
+
 def get_klen_and_angular_mesh(k_num, theta_num, phi_num, energy_range, theta_range, phi_range):
     # Get the corresponding energy mesh
     energy_grid = np.linspace(start=energy_range[0], stop=energy_range[1], num=k_num)

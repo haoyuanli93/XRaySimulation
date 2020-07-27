@@ -920,6 +920,7 @@ def get_bragg_reflection_pi_polarization(reflectivity_pi,
 
         # Get the jacobian :   dot(kout, n) / dot(kin, n)
         jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
+        # jacobian[idx] *= complex(math.fabs(kout_x * n[0] + kout_y * n[1] + kout_z * n[2]) / dot_kn, 0)
 
         #####################################################################################################
         # Step 2: Get the reflectivity
