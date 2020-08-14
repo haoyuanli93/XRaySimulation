@@ -20,8 +20,9 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
                                                  kx_grid,
                                                  ky_grid,
                                                  kz_grid,
-                                                 number_x, number_y, number_z,
-                                                 z_idx_range,
+                                                 number_x,
+                                                 number_y,
+                                                 number_z,
                                                  d_num=512):
     """
 
@@ -38,7 +39,6 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
     :param number_x:
     :param number_y:
     :param number_z:
-    :param z_idx_range:
     :param d_num:
     :return:
     """
@@ -48,7 +48,7 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #  [3D Blocks]
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    efield_spec_3d = np.zeros((number_x, number_y, z_idx_range, 3), dtype=np.complex128)
+    efield_spec_3d = np.zeros((number_x, number_y, number_z, 3), dtype=np.complex128)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #  [1D slices] Various intersection points, path length and phase
@@ -260,7 +260,7 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
                                                                        cuda_spec_vec,
                                                                        cuda_klen_grid,
                                                                        cuda_kin_grid,
-                                                                       my_crystal.d,
+                                                                       my_crystal.thickness,
                                                                        my_crystal.h,
                                                                        my_crystal.normal,
                                                                        my_crystal.dot_hn,

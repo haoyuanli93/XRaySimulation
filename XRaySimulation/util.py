@@ -89,6 +89,14 @@ def fwhm_to_sigma(fwhm):
     return fwhm / (2. * np.sqrt(2 * np.log(2)))
 
 
+def intensity_fwhm_to_field_sigma(fwhm):
+    return fwhm / (2. * np.sqrt(2 * np.log(2))) * np.sqrt(2)
+
+
+def field_sigma_to_intensity_fwhm(sigma):
+    return sigma * (2. * np.sqrt(2 * np.log(2))) / np.sqrt(2)
+
+
 # --------------------------------------------------------------
 #          Uncertainty Principle
 # --------------------------------------------------------------

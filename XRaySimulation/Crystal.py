@@ -260,7 +260,7 @@ class RectangleGrating:
         self.normal = normal / util.l2_norm(normal)
         self.__update_h()
 
-    def set_diffraction_order(self,order):
+    def set_diffraction_order(self, order):
         self.order = order
         self.momentum_transfer = self.order * self.base_wave_vector
 
