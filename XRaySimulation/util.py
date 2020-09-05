@@ -469,9 +469,9 @@ def get_total_path_length(point_list):
     """
     number = len(point_list)
     total_path = 0.
-    for l in range(number - 1):
-        total_path += l2_norm(point_list[l + 1] -
-                              point_list[l])
+    for idx in range(number - 1):
+        total_path += l2_norm(point_list[idx + 1] -
+                              point_list[idx])
 
     return total_path
 
@@ -967,9 +967,9 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
 
     Example
     -------
-    >>> m = np.arange(0,100,1).reshape((10,10))
-    >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
-    >>> print(n)
+    # >>> m = np.arange(0,100,1).reshape((10,10))
+    # >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
+    # >>> print(n)
 
     [[ 22  30  38  46  54]
      [102 110 118 126 134]
@@ -979,14 +979,14 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
 
     """
     operation = operation.lower()
-    if not operation in ['sum', 'mean']:
+    if not (operation in ['sum', 'mean']):
         raise ValueError("Operation not supported.")
     if ndarray.ndim != len(new_shape):
         raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
                                                            new_shape))
-    compression_pairs = [(d, c // d) for d, c in zip(new_shape,
-                                                     ndarray.shape)]
-    flattened = [l for p in compression_pairs for l in p]
+    compression_pairs = [(tmp1, tmp2 // tmp1) for tmp1, tmp2 in zip(new_shape,
+                                                                    ndarray.shape)]
+    flattened = [tmp1 for tmp2 in compression_pairs for tmp1 in tmp2]
     ndarray = ndarray.reshape(flattened)
     for i in range(len(new_shape)):
         op = getattr(ndarray, operation)

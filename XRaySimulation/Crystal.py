@@ -7,7 +7,6 @@ fs, um are the units
 import numpy as np
 
 from XRaySimulation import util
-from XRaySimulation.CrystalDatabase import waaskirf_table
 
 hbar = util.hbar  # This is the reduced planck constant in keV/fs
 c = util.c  # The speed of light in um / fs
@@ -16,6 +15,9 @@ pi = util.pi
 # Default incident photon energy
 bragg_energy = 6.95161 * 2  # kev
 wavenumber = util.kev_to_wave_number(bragg_energy)
+
+# Some numerical values
+cot_pi_8 = 1. + np.sqrt(2)
 
 
 class CrystalBlock3D:
@@ -276,141 +278,3 @@ class RectangleGrating:
         # Update h and wave vector
         self.__update_h()
         self.__update_period_wave_vector()
-
-
-#######################################################################################################
-#               Calculate the electric susceptibility and h values
-#######################################################################################################
-def get_reciprocal_lattice(crystal_type, index):
-    if crystal_type == "Silicon":
-        lattice_parameter = 5.431020511 * 1e-4  # um
-
-
-def get_atomic_form_factor(atom_type, q_array):
-    """
-    Get the atomic form factor for a specific atom for an array of different q values
-    Here, q is defined as 2 pi / wave-length.
-
-    Currently, the available atom types are
-
-    silicon
-    carbon
-
-    :param atom_type:
-    :param q_array:
-    :return:
-    """
-    if atom_type == "silicon":
-        # Get the coefficient from the table
-        [a1, a2, a3, a4, a5, c0, b1, b2, b3, b4, b5] = waaskirf_table[23, 2:]
-
-        # Fit with the coefficient to get the form factors
-        form_factors = (a1 * np.exp(-b1 * q_array ** 2) +
-                        a2 * np.exp(-b2 * q_array ** 2) +
-                        a3 * np.exp(-b3 * q_array ** 2) +
-                        a4 * np.exp(-b4 * q_array ** 2) +
-                        a5 * np.exp(-b5 * q_array ** 2) + c0)
-
-        return form_factors
-
-
-def get_universal_anomalous_dispersion_curve_j(p, q):
-    """
-    This function get the Jq function value defined in paper
-    "Anomalous Dispersion and Scattering of X-Rays" PhysRev.94.1593
-
-    :param p:
-    :param q:
-    :return:
-    """
-    pass
-
-
-def _get_re_jqm1_7_3(a, theta, xi, z):
-    """
-    Get the value of the function (22) and (23) defined in paper
-    "Anomalous Dispersion and Scattering of X-Rays" PhysRev.94.1593
-
-    Notice that in this function, factors in xi larger than the second order were ignored.
-
-    :param a:
-    :param theta:
-    :param xi:
-    :param z:
-    :return:
-    """
-
-    if np.abs(z) < 1.:
-        factor_1 = - 2. * (a ** 2) / 3.
-
-        factor_2_1 = 0.5 * np.log((1. + a + a ** 2) /
-                                  (1. - 2. * a * np.cos(theta / 3.) + a ** 2))
-        factor_2_2 = np.sqrt(3.) * np.arctan(np.sqrt(3.) * a / (2. + a))
-        factor_2_3 = - np.pi / np.sqrt(3) * (1. - 5. * xi / np.sqrt(3))
-        factor_2_4 = - 5. * xi / 3. * np.arctan(a * np.sin(theta / 3.) / (1. - a * np.cos(theta / 3.)))
-
-        return factor_1 * (factor_2_1 + factor_2_2 + factor_2_3 + factor_2_4)
-
-    else:
-        b = 1. / a
-
-        factor_1 = -2. / (3. * (b ** 2))
-
-        factor_2_1 = 0.5 * np.log((1. + b + b ** 2) / (1. - 2. * b * np.cos(theta / 3.) + b ** 2))
-        factor_2_2 = -np.sqrt(3.) * np.arctan(np.sqrt(3.) * b / (2. + b))
-        factor_2_3 = 5. * xi / 3. * np.arctan(b * np.sin(theta / 3.) / (1 - b * np.cos(theta / 3.)))
-
-        return factor_1 * (factor_2_1 + factor_2_2 + factor_2_3)
-
-
-def _get_re_jqm1_5_2(a, theta, xi, z):
-    """
-    Get the value of the function (24) and (25) defined in paper
-    "Anomalous Dispersion and Scattering of X-Rays" PhysRev.94.1593
-
-    Notice that in this function, factors in xi larger than the second order were ignored.
-
-    :param a:
-    :param theta:
-    :param xi:
-    :param z:
-    :return:
-    """
-
-    if np.abs(z) < 1.:
-        factor_1 = - 3 * (a ** 3) / 4
-
-        factor_2_1 = 0.5 * np.log(((1. + a) ** 2) / (1. - 2. * a * np.cos(theta / 4.) + a ** 2))
-        factor_2_2 = 2. * np.arctan(a)
-        factor_2_3 = - np.pi * (1 - 7 * xi / 4.)
-        factor_2_4 = -7. * xi / 4. * np.arctan(a * np.sin(theta / 4.) / (1 - a * np.cos(theta / 4.)))
-
-        return factor_1 * (factor_2_1 + factor_2_2 + factor_2_3 + factor_2_4)
-    else:
-        b = 1 / a
-
-        factor_1 = -3. / (4 * b ** 3)
-
-        factor_2_1 = 0.5 * np.log(((1 + b) ** 2) / (1 - 2 * b * np.cos(theta / 4.) + b ** 2))
-        factor_2_2 = -2. * np.arctan(b)
-        factor_2_3 = 7. * xi / 4. * np.arctan(b * np.sin(theta / 4.) / (1 - b * np.cos(theta / 4.)))
-
-        return factor_1 * (factor_2_1 + factor_2_2 + factor_2_3)
-
-
-def _get_re_jqm1_11_4(a, theta, xi, z):
-    """
-    Get the value of the function (26) and (27) defined in paper
-    "Anomalous Dispersion and Scattering of X-Rays" PhysRev.94.1593
-
-    Notice that in this function, factors in xi larger than the second order were ignored.
-
-    :param a:
-    :param theta:
-    :param xi:
-    :param z:
-    :return:
-    """
-
-    if np.abs(z) < 1.:
-        pass
