@@ -141,7 +141,7 @@ def get_statistics(distribution, coor=None):
             holder["sigma"].update({axis: np.copy(std)})
 
             # Get fwhm
-            holder["fwhm"].update({axis: get_fwhm(coordinate=coor, curve_values=prob_dist)})
+            holder["fwhm"].update({axis: get_fwhm(coordinate=coor[axis], curve_values=prob_dist)})
 
     return holder
 

@@ -143,5 +143,5 @@ def load_field(dfl_file, out_file, new_shape=None):
         toc = time.time()
 
         print("It takes {:.2f} seconds to load the field".format(toc - tic))
-        
+
     return simu_info, in_field
