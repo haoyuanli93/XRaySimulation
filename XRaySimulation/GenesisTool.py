@@ -131,11 +131,12 @@ def load_field(dfl_file, out_file, new_shape=None):
                    y_c - new_shape[1] // 2:y_c + new_shape[1] // 2, :]
 
         # Pad zeros
+        left_pad_num = (new_shape[2] - old_shape[2]) // 2
+        right_pad_num = new_shape[2] - left_pad_num - old_shape[2]
         in_field = np.ascontiguousarray(np.pad(in_field,
                                                ((0, 0),
                                                 (0, 0),
-                                                ((new_shape[2] - old_shape[2]) // 2,
-                                                 (new_shape[2] - old_shape[2]) // 2 + 1)
+                                                (left_pad_num, right_pad_num)
                                                 ),
                                                mode='constant',
                                                constant_values=0.))
