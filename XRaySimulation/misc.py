@@ -79,7 +79,80 @@ def get_fwhm(coordinate, curve_values, center=False):
         return fwhm
 
 
+def get_statistics(distribution, coor=None):
+    # Get a holder for the analysis result
+    holder = {"2d slice": {},
+              "2d projection": {},
+              "1d slice": {},
+              "1d projection": {},
+              }
+
+    # Get distribution shape
+    dist_shape = np.array(distribution.shape, dtype=np.int64)
+    center_position = dist_shape // 2
+    x_c = center_position[0]
+    y_c = center_position[1]
+    z_c = center_position[2]
+
+    # Get the 2d slice
+    tmp_xy = distribution[:, :, z_c]
+    tmp_xz = distribution[:, y_c, :]
+    tmp_yz = distribution[x_c, :, :]
+    holder['2d slice'].update({"xy": np.copy(tmp_xy),
+                               "xz": np.copy(tmp_xz),
+                               "yz": np.copy(tmp_yz),
+                               })
+
+    # Get 2d projection
+    tmp_xy = np.sum(distribution, axis=2)
+    tmp_xz = np.sum(distribution, axis=1)
+    tmp_yz = np.sum(distribution, axis=0)
+    holder['2d projection'].update({"xy": np.copy(tmp_xy),
+                                    "xz": np.copy(tmp_xz),
+                                    "yz": np.copy(tmp_yz),
+                                    })
+
+    # Get 1d slice
+    holder['1d slice'].update({"x": np.copy(distribution[:, y_c, z_c]),
+                               "y": np.copy(distribution[x_c, :, z_c]),
+                               "z": np.copy(distribution[x_c, y_c, :]),
+                               })
+
+    # Get 1d projection
+    holder['1d projection'].update({"x": np.copy(np.sum(tmp_xy, axis=1)),
+                                    "y": np.copy(np.sum(tmp_xy, axis=0)),
+                                    "z": np.copy(np.sum(tmp_xz, axis=0)),
+                                    })
+
+    if coor is not None:
+        # Create an entry called sigma to get the sigma and FWHM
+        holder.update({"sigma": {},
+                       "fwhm": {}})
+
+        for axis in ['x', 'y', 'z']:
+            # Normalize to get the distribution
+            tmp = np.copy(holder['1d projection'][axis])
+            prob_dist = tmp / np.sum(tmp)
+
+            # Get sigma
+            mean = np.sum(np.multiply(prob_dist, coor[axis]))
+            std = np.sum(np.multiply(np.square(prob_dist), coor[axis])) - np.square(mean)
+
+            holder["sigma"].update({axis: np.copy(std)})
+
+            # Get fwhm
+            holder["fwhm"].update({axis: get_fwhm(coordinate=coor, curve_values=prob_dist)})
+
+    return holder
+
+
 def get_gaussian_fit(curve, coordinate):
+    """
+    Fit the target curve with a Gaussian function
+    :param curve:
+    :param coordinate:
+    :return:
+    """
     total = np.sum(curve)
     distribution = curve / total
 
