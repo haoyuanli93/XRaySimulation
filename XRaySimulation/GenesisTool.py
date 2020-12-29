@@ -5,7 +5,7 @@ I have modified them to have the same style as my other code.
 """
 
 import re
-
+import time
 import numpy as np
 
 
@@ -85,3 +85,63 @@ def read_field(field_file, out_file=None):
     imag = imag.reshape((-1, ncar, ncar))
     comp = real + np.multiply(1j, imag)
     return comp
+
+
+def load_field(dfl_file, out_file, new_shape=None):
+    """
+    Load the field.
+    select useful central region.
+    Add some padding.
+
+    :param dfl_file:
+    :param out_file:
+    :param new_shape:
+    :return:
+    """
+
+    # Load the field
+    tic = time.time()
+    in_field = read_field(field_file=dfl_file, out_file=out_file)
+
+    # Change the axes to make it compatible with my convention
+    in_field = np.moveaxis(in_field, (0, 1, 2), (2, 0, 1))
+
+    # Load simulation info
+    (wavelength,
+     dz,
+     gradepoints,
+     dy) = get_simulation_info(out_file=out_file)
+    simu_info = {"wavelength": wavelength,
+                 "gradepoints": gradepoints,
+                 "dy": dy,
+                 "dz": dz, }
+
+    # Select the central region and add zero padding to the array if necessary
+    if new_shape is not None:
+        # Extract the shape of the incident field
+        old_shape = np.array(in_field.shape, dtype=np.int64)
+        tmp = old_shape // 2
+        x_c = tmp[0]
+        y_c = tmp[1]
+        z_c = tmp[2]
+
+        # Select the central region in the transverse direction
+        in_field = in_field[
+                   x_c - new_shape[0] // 2:x_c + new_shape[0] // 2,
+                   y_c - new_shape[1] // 2:y_c + new_shape[1] // 2, :]
+
+        # Pad zeros
+        in_field = np.ascontiguousarray(np.pad(in_field,
+                                               ((0, 0),
+                                                (0, 0),
+                                                ((new_shape[2] - old_shape[2]) // 2,
+                                                 (new_shape[2] - old_shape[2]) // 2 + 1)
+                                                ),
+                                               mode='constant',
+                                               constant_values=0.))
+
+        toc = time.time()
+
+        print("It takes {:.2f} seconds to load the field".format(toc - tic))
+        
+    return simu_info, in_field
