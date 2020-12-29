@@ -77,8 +77,24 @@ def petahertz_angular_frequency_to_wave_number(angular_frequency):
     return angular_frequency / c
 
 
-def wave_number_to_kev(wavevec):
+def wavevec_to_kev(wavevec):
+    """
+    Convert wavevector
+    wavevector = 2 pi / wavelength
+    :param wavevec:
+    :return:
+    """
     return wavevec * hbar * c
+
+
+def wavenumber_to_kev(wavenumber):
+    """
+    Convert wave number to keV.
+    wavenumber = 1 / wavelength
+    :param wavenumber:
+    :return:
+    """
+    return wavenumber * hbar * c * two_pi
 
 
 def sigma_to_fwhm(sigma):
@@ -992,3 +1008,50 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
         op = getattr(ndarray, operation)
         ndarray = op(-1 * (i + 1))
     return ndarray
+
+
+#####################################################################
+#     New functions
+#####################################################################
+def get_axis(number, resolution):
+    """
+    Generate real space and reciprocal space coordinate with specified numbers and resolution
+
+    :param number:
+    :param resolution:
+    :return:
+    """
+    left_end = -int(number) // 2
+    right_end = int(number) + left_end
+
+    # Create the real space axis
+    real_axis = np.arange(left_end, right_end) * resolution
+
+    # Find wave number range and resolution
+    wavenumber_range = 1 / resolution
+    wavenumber_reso = wavenumber_range / number
+
+    # Create wave number axis
+    wavenumber_axis = np.arange(left_end, right_end) * wavenumber_reso
+
+    # Get the corresponding energy range
+    energy_range = wavenumber_to_kev(wavenumber=wavenumber_range)
+
+    return energy_range, real_axis, wavenumber_axis
+
+
+def get_axes_3d(numbers, resolutions):
+    holder = {"energy range": {},
+              "real axis": {},
+              'wavenumber axis': {}}
+
+    axis_name = ['x', 'y', 'z']
+
+    for idx in range(3):
+        tmp_energy, tmp_real, tmp_wavenum = get_axis(number=numbers[idx],
+                                                     resolution=resolutions[idx])
+        holder['energy range'].update({axis_name[idx]: np.copy(tmp_energy)})
+        holder['real axis'].update({axis_name[idx]: np.copy(tmp_real)})
+        holder['wavenumber axis'].update({axis_name[idx]: np.copy(tmp_wavenum)})
+
+    return holder
