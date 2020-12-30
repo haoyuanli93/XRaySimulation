@@ -3,6 +3,7 @@ import time
 
 import h5py as h5
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 ########################################################################################################################
@@ -165,3 +166,90 @@ def get_gaussian_fit(curve, coordinate):
 
     gaussian_fit *= total
     return gaussian_fit
+
+
+############################################################
+#     Show stats
+############################################################
+def show_stats_2d(stats_holder, fig_height, fig_width):
+    fig, axes = plt.subplots(nrows=3, ncols=2)
+
+    fig.set_figheight(fig_height)
+    fig.set_figwidth(fig_width)
+
+    #########################################
+    #    xy slice and projection
+    #########################################
+    im00 = axes[0, 0].imshow(stats_holder['2d slice']['xy'], cmap='jet')
+    axes[0, 0].set_title("XY Slice")
+    axes[0, 0].set_axis_off()
+    fig.colorbar(im00, ax=axes[0, 0])
+
+    im01 = axes[0, 1].imshow(stats_holder['2d projection']['xy'], cmap='jet')
+    axes[0, 1].set_title("XY Projection")
+    axes[0, 1].set_axis_off()
+    fig.colorbar(im01, ax=axes[0, 1])
+
+    #########################################
+    #    xz slice and projection
+    #########################################
+    im10 = axes[1, 0].imshow(stats_holder['2d slice']['xz'], cmap='jet', aspect="auto")
+    axes[1, 0].set_title("XZ Slice")
+    axes[1, 0].set_axis_off()
+    fig.colorbar(im10, ax=axes[1, 0])
+
+    im11 = axes[1, 1].imshow(stats_holder['2d projection']['xz'], cmap='jet', aspect="auto")
+    axes[1, 1].set_title("XZ Projection")
+    axes[1, 1].set_axis_off()
+    fig.colorbar(im11, ax=axes[1, 1])
+
+    #########################################
+    #    yz slice and projection
+    #########################################
+    im20 = axes[2, 0].imshow(stats_holder['2d slice']['yz'], cmap='jet', aspect="auto")
+    axes[2, 0].set_title("YZ Slice")
+    axes[2, 0].set_axis_off()
+    fig.colorbar(im20, ax=axes[2, 0])
+
+    im21 = axes[2, 1].imshow(stats_holder['2d projection']['yz'], cmap='jet', aspect="auto")
+    axes[2, 1].set_title("YZ Projection")
+    axes[2, 1].set_axis_off()
+    fig.colorbar(im21, ax=axes[2, 1])
+
+    plt.show()
+
+
+def show_stats_1d(stats_holder, coor, fig_height, fig_width):
+    fig, axes = plt.subplots(nrows=3, ncols=2)
+
+    fig.set_figheight(fig_height)
+    fig.set_figwidth(fig_width)
+
+    #########################################
+    #    x slice and projection
+    #########################################
+    axes[0, 0].plt.plot(coor['real axis']['x'], stats_holder['1d slice']['x'])
+    axes[0, 0].set_title("X Slice")
+
+    axes[0, 1].plt.plot(coor['real axis']['x'], stats_holder['1d projection']['x'])
+    axes[0, 1].set_title("X Projection")
+
+    #########################################
+    #    y slice and projection
+    #########################################
+    axes[1, 0].plt.plot(coor['real axis']['y'], stats_holder['1d slice']['y'])
+    axes[1, 0].set_title("Y Slice")
+
+    axes[1, 1].plt.plot(coor['real axis']['y'], stats_holder['1d projection']['y'])
+    axes[1, 1].set_title("Y Projection")
+
+    #########################################
+    #    yz slice and projection
+    #########################################
+    axes[2, 0].plt.plot(coor['real axis']['z'], stats_holder['1d slice']['z'])
+    axes[2, 0].set_title("Z Slice")
+
+    axes[2, 1].plt.plot(coor['real axis']['z'], stats_holder['1d projection']['z'])
+    axes[2, 1].set_title("Z Projection")
+
+    plt.show()
