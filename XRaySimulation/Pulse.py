@@ -46,7 +46,7 @@ class GaussianPulse3D:
         :return:
         """
         # Get the corresponding wave vector
-        self.klen0 = util.kev_to_wave_number(energy=central_energy)
+        self.klen0 = util.kev_to_wavevec_length(energy=central_energy)
 
         self.polar = np.array(np.reshape(polar, (3,)),
                               dtype=np.complex128)

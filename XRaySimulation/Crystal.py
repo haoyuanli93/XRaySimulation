@@ -14,7 +14,7 @@ pi = util.pi
 
 # Default incident photon energy
 bragg_energy = 6.95161 * 2  # kev
-wavenumber = util.kev_to_wave_number(bragg_energy)
+wavenumber = util.kev_to_wavevec_length(bragg_energy)
 
 # Some numerical values
 cot_pi_8 = 1. + np.sqrt(2)
@@ -141,7 +141,7 @@ class CrystalBlock3D:
         self.h_square = self.h[0] ** 2 + self.h[1] ** 2 + self.h[2] ** 2
         self.h_len = np.sqrt(self.h_square)
 
-    def shift(self, displacement, include_boundary=False):
+    def shift(self, displacement, include_boundary=True):
         """
 
         :param displacement:
@@ -153,7 +153,7 @@ class CrystalBlock3D:
         if include_boundary:
             self.boundary += displacement[np.newaxis, :]
 
-    def rotate(self, rot_mat, include_boundary=False):
+    def rotate(self, rot_mat, include_boundary=True):
         # The shift of the space does not change the reciprocal lattice and the normal direction
         self.h = np.ascontiguousarray(rot_mat.dot(self.h))
         self.normal = np.ascontiguousarray(rot_mat.dot(self.normal))
@@ -166,7 +166,7 @@ class CrystalBlock3D:
     #   This is a methods designed for the simulation of the light path
     #   to investigate whether the crystal will block hte light or not.
     ##############################################
-    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=False):
+    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=True):
         """
         This is a function designed
         :param rot_mat:

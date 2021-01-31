@@ -61,7 +61,7 @@ def kev_to_petahertz_angular_frequency(energy):
     return energy / hbar
 
 
-def kev_to_wave_number(energy):
+def kev_to_wavevec_length(energy):
     return energy / hbar / c
 
 
@@ -118,6 +118,20 @@ def field_sigma_to_intensity_fwhm(sigma):
 # --------------------------------------------------------------
 def bandwidth_sigma_kev_to_duration_sigma_fs(bandwidth_kev):
     return hbar / 2. / bandwidth_kev
+
+
+def get_intensity_fwhm_duration_from_intensity_bandwidth(bandwidth_kev):
+    # Convert intensity bandwidth to field bandwidth
+    field_bandwidth = bandwidth_kev * np.sqrt(2)
+    field_bandwidth_sigma = fwhm_to_sigma(field_bandwidth)
+
+    # Calcualte the pulse duration
+    field_duration_sigma = bandwidth_sigma_kev_to_duration_sigma_fs(field_bandwidth_sigma)
+    field_duration_fwhm = sigma_to_fwhm(field_duration_sigma)
+
+    # Convert the field duration fwhm to intensity duration fwhm
+    intensity_duration_fwhm = field_duration_fwhm / np.sqrt(2)
+    return intensity_duration_fwhm
 
 
 # --------------------------------------------------------------
@@ -596,26 +610,26 @@ def get_k_mesh_3d(number_x, number_y, number_z, delta_e_x, delta_e_y, delta_e_z)
                                 num=number_z)
 
     # Get the k grid
-    kx_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_x))
-    ky_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_y))
-    kz_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_z))
+    kx_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid_x))
+    ky_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid_y))
+    kz_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid_z))
 
     # Get the spatial mesh along x axis
-    dkx = kev_to_wave_number(energy=energy_grid_x[1] - energy_grid_x[0])
+    dkx = kev_to_wavevec_length(energy=energy_grid_x[1] - energy_grid_x[0])
     x_range = np.pi * 2 / dkx
 
     x_idx = np.linspace(start=-x_range / 2., stop=x_range / 2., num=number_x)
     x_idx_tick = ["{:.2f}".format(x) for x in x_idx]
 
     # Get the spatial mesh along y axis
-    dky = kev_to_wave_number(energy=energy_grid_y[1] - energy_grid_y[0])
+    dky = kev_to_wavevec_length(energy=energy_grid_y[1] - energy_grid_y[0])
     y_range = np.pi * 2 / dky
 
     y_idx = np.linspace(start=-y_range / 2., stop=y_range / 2., num=number_y)
     y_idx_tick = ["{:.2f}".format(x) for x in y_idx]
 
     # Get the spatial mesh along z axis
-    dkz = kev_to_wave_number(energy=energy_grid_z[1] - energy_grid_z[0])
+    dkz = kev_to_wavevec_length(energy=energy_grid_z[1] - energy_grid_z[0])
     z_range = np.pi * 2 / dkz
 
     z_idx = np.linspace(start=-z_range / 2., stop=z_range / 2., num=number_z)
@@ -665,14 +679,14 @@ def get_k_mesh_1d(number, energy_range):
                                 num=number)
 
     # Get the k grid
-    kz_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid_z))
+    kz_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid_z))
 
     # Get a wave vector array
     k_grid = np.zeros((kz_grid.shape[0], 3), dtype=np.float64)
     k_grid[:, 2] = kz_grid[:]
 
     # Get the spatial mesh along z axis
-    dkz = kev_to_wave_number(energy=energy_grid_z[1] - energy_grid_z[0])
+    dkz = kev_to_wavevec_length(energy=energy_grid_z[1] - energy_grid_z[0])
     z_range = np.pi * 2 / dkz
 
     z_idx = np.linspace(start=-z_range / 2., stop=z_range / 2., num=number)
@@ -695,7 +709,7 @@ def get_klen_and_angular_mesh(k_num, theta_num, phi_num, energy_range, theta_ran
     # Get the corresponding energy mesh
     energy_grid = np.linspace(start=energy_range[0], stop=energy_range[1], num=k_num)
     # Get the k grid
-    klen_grid = np.ascontiguousarray(kev_to_wave_number(energy=energy_grid))
+    klen_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid))
 
     # Get theta grid
     theta_grid = np.linspace(start=theta_range[0], stop=theta_range[1], num=theta_num)
