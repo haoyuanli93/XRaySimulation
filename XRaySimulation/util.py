@@ -15,25 +15,6 @@ c = 299792458. * 1e-9  # The speed of light in um / fs
 # --------------------------------------------------------------
 #               Simple functions
 # --------------------------------------------------------------
-def exp_stable(x):
-    """
-    This function calculate the exponential of a complex variable in a stable way.
-    :param x:
-    :return:
-    """
-    re = x.real
-    im = x.imag
-
-    im = np.mod(im, 2 * pi)
-    phase = np.cos(im) + 1.j * np.sin(im)
-
-    # Build a mask to find too small values
-    # Assume that when re is less than -100, define the value to be 0
-    magnitude = np.zeros_like(re, dtype=np.complex128)
-    magnitude[re >= -100] = np.exp(re[re >= -100]) + 0.j
-    return np.multiply(magnitude, phase)
-
-
 def l2_norm(x):
     return np.sqrt(np.sum(np.square(x)))
 
@@ -73,7 +54,7 @@ def petahertz_angular_frequency_to_kev(angular_frequency):
     return hbar * angular_frequency
 
 
-def petahertz_angular_frequency_to_wave_number(angular_frequency):
+def petahertz_angular_frequency_to_wavevec(angular_frequency):
     return angular_frequency / c
 
 
@@ -85,16 +66,6 @@ def wavevec_to_kev(wavevec):
     :return:
     """
     return wavevec * hbar * c
-
-
-def wavenumber_to_kev(wavenumber):
-    """
-    Convert wave number to keV.
-    wavenumber = 1 / wavelength
-    :param wavenumber:
-    :return:
-    """
-    return wavenumber * hbar * c * two_pi
 
 
 def sigma_to_fwhm(sigma):
@@ -705,25 +676,6 @@ def get_k_mesh_1d(number, energy_range):
     return k_grid, axis_info
 
 
-def get_klen_and_angular_mesh(k_num, theta_num, phi_num, energy_range, theta_range, phi_range):
-    # Get the corresponding energy mesh
-    energy_grid = np.linspace(start=energy_range[0], stop=energy_range[1], num=k_num)
-    # Get the k grid
-    klen_grid = np.ascontiguousarray(kev_to_wavevec_length(energy=energy_grid))
-
-    # Get theta grid
-    theta_grid = np.linspace(start=theta_range[0], stop=theta_range[1], num=theta_num)
-
-    # Get phi grid
-    phi_grid = np.linspace(start=phi_range[0], stop=phi_range[1], num=phi_num)
-
-    info_dict = {"energy_grid": energy_grid,
-                 "klen_grid": klen_grid,
-                 "theta_grid": theta_grid,
-                 "phi_grid": phi_grid}
-    return info_dict
-
-
 # ----------------------------------------------------------------------------
 #               For telescope
 # ----------------------------------------------------------------------------
@@ -984,46 +936,6 @@ def get_intensity_efficiency_sigma_polarization(device, kin):
         return np.square(np.abs(device.efficiency))
 
 
-#########################################################
-#   Reshape the array
-#########################################################
-def bin_ndarray(ndarray, new_shape, operation='sum'):
-    """
-    Bins an ndarray in all axes based on the target shape, by summing or
-        averaging.
-
-    Number of output dimensions must match number of input dimensions and
-        new axes must divide old ones.
-
-    Example
-    -------
-    # >>> m = np.arange(0,100,1).reshape((10,10))
-    # >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
-    # >>> print(n)
-
-    [[ 22  30  38  46  54]
-     [102 110 118 126 134]
-     [182 190 198 206 214]
-     [262 270 278 286 294]
-     [342 350 358 366 374]]
-
-    """
-    operation = operation.lower()
-    if not (operation in ['sum', 'mean']):
-        raise ValueError("Operation not supported.")
-    if ndarray.ndim != len(new_shape):
-        raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
-                                                           new_shape))
-    compression_pairs = [(tmp1, tmp2 // tmp1) for tmp1, tmp2 in zip(new_shape,
-                                                                    ndarray.shape)]
-    flattened = [tmp1 for tmp2 in compression_pairs for tmp1 in tmp2]
-    ndarray = ndarray.reshape(flattened)
-    for i in range(len(new_shape)):
-        op = getattr(ndarray, operation)
-        ndarray = op(-1 * (i + 1))
-    return ndarray
-
-
 #####################################################################
 #     New functions
 #####################################################################
@@ -1042,22 +954,22 @@ def get_axis(number, resolution):
     real_axis = np.arange(left_end, right_end) * resolution
 
     # Find wave number range and resolution
-    wavenumber_range = 1 / resolution
-    wavenumber_reso = wavenumber_range / number
+    wavevec_range = np.pi * 2. / resolution
+    wavevec_reso = wavevec_range / number
 
     # Create wave number axis
-    wavenumber_axis = np.arange(left_end, right_end) * wavenumber_reso
+    wavevec_axis = np.arange(left_end, right_end) * wavevec_reso
 
     # Get the corresponding energy range
-    energy_range = wavenumber_to_kev(wavenumber=wavenumber_range)
+    energy_range = wavevec_to_kev(wavevec=wavevec_range)
 
-    return energy_range, real_axis, wavenumber_axis
+    return energy_range, real_axis, wavevec_axis
 
 
 def get_axes_3d(numbers, resolutions):
     holder = {"energy range": {},
               "real axis": {},
-              'wavenumber axis': {}}
+              'wavevec axis': {}}
 
     axis_name = ['x', 'y', 'z']
 
@@ -1066,6 +978,6 @@ def get_axes_3d(numbers, resolutions):
                                                      resolution=resolutions[idx])
         holder['energy range'].update({axis_name[idx]: np.copy(tmp_energy)})
         holder['real axis'].update({axis_name[idx]: np.copy(tmp_real)})
-        holder['wavenumber axis'].update({axis_name[idx]: np.copy(tmp_wavenum)})
+        holder['wavevec axis'].update({axis_name[idx]: np.copy(tmp_wavenum)})
 
     return holder
