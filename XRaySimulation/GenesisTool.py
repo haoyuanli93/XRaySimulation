@@ -13,7 +13,7 @@ def get_simulation_info(out_file):
     # Get the spatial resolution along the propagation direction
     central_wavelength = float(get_input_param(out_file, 'xlamds').replace('D', 'E')) * 1e6
 
-    tmp = float(get_input_param(out_file, 'delz').replace('D', 'E'))
+    tmp = float(get_input_param(out_file, 'zsep').replace('D', 'E'))
     dz = tmp * central_wavelength
 
     # Get the spatial resolution along the transverse direction
