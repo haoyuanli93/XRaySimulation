@@ -228,28 +228,28 @@ def show_stats_1d(stats_holder, coor, fig_height, fig_width):
     #########################################
     #    x slice and projection
     #########################################
-    axes[0, 0].plot(coor['real axis']['x'], stats_holder['1d slice']['x'])
+    axes[0, 0].plot(coor['x'], stats_holder['1d slice']['x'])
     axes[0, 0].set_title("X Slice")
 
-    axes[0, 1].plot(coor['real axis']['x'], stats_holder['1d projection']['x'])
+    axes[0, 1].plot(coor['x'], stats_holder['1d projection']['x'])
     axes[0, 1].set_title("X Projection")
 
     #########################################
     #    y slice and projection
     #########################################
-    axes[1, 0].plot(coor['real axis']['y'], stats_holder['1d slice']['y'])
+    axes[1, 0].plot(coor['y'], stats_holder['1d slice']['y'])
     axes[1, 0].set_title("Y Slice")
 
-    axes[1, 1].plot(coor['real axis']['y'], stats_holder['1d projection']['y'])
+    axes[1, 1].plot(coor['y'], stats_holder['1d projection']['y'])
     axes[1, 1].set_title("Y Projection")
 
     #########################################
     #    yz slice and projection
     #########################################
-    axes[2, 0].plot(coor['real axis']['z'], stats_holder['1d slice']['z'])
+    axes[2, 0].plot(coor['z'], stats_holder['1d slice']['z'])
     axes[2, 0].set_title("Z Slice")
 
-    axes[2, 1].plot(coor['real axis']['z'], stats_holder['1d projection']['z'])
+    axes[2, 1].plot(coor['z'], stats_holder['1d projection']['z'])
     axes[2, 1].set_title("Z Projection")
 
     plt.show()
