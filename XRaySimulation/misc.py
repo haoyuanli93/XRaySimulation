@@ -137,7 +137,7 @@ def get_statistics(distribution, coor=None):
 
             # Get sigma
             mean = np.sum(np.multiply(prob_dist, coor[axis]))
-            std = np.sum(np.multiply(np.square(prob_dist), coor[axis])) - np.square(mean)
+            std = np.sum(np.multiply(np.square(coor[axis]), prob_dist)) - np.square(mean)
 
             holder["sigma"].update({axis: np.copy(std)})
 
