@@ -742,6 +742,12 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_position, foc
 #               Alignment
 # -------------------------------------------------------------
 def align_crystal_reciprocal_lattice(crystal, axis):
+    """
+
+    :param crystal: The crystal to align
+    :param axis: The direction along which the reciprocal lattice will be aligned.
+    :return:
+    """
     # 1 Get the angle
     cos_val = np.dot(axis, crystal.h) / l2_norm(axis) / l2_norm(crystal.h)
     rot_angle = np.arccos(np.clip(cos_val, -1, 1))
@@ -753,7 +759,7 @@ def align_crystal_reciprocal_lattice(crystal, axis):
     new_h = np.dot(rot_mat, crystal.h)
     # print(new_h)
 
-    if np.dot(new_h, axis) / l2_norm(new_h) / l2_norm(crystal.h) < 0.999:
+    if np.dot(new_h, axis) / l2_norm(new_h) / l2_norm(axis) < 0.999:
         # print("aaa")
         rot_mat = rot_mat_in_yz_plane(theta=-rot_angle)
 
@@ -762,6 +768,7 @@ def align_crystal_reciprocal_lattice(crystal, axis):
 
 
 def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
+
     ###########################
     #   Align the recirpocal lattice with kin
     ###########################
@@ -787,6 +794,17 @@ def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
 def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
                                              scan_range=0.0005, scan_number=10000,
                                              ):
+    """
+    Align the crystal such that the incident wave vector is at the center of the
+    reflectivity curve
+
+    :param crystal:
+    :param kin:
+    :param rot_direction:
+    :param scan_range:
+    :param scan_number:
+    :return:
+    """
     # Align the crystal with geometric bragg reflection theory
     align_crystal_geometric_bragg_reflection(crystal=crystal, kin=kin, rot_direction=rot_direction)
 
