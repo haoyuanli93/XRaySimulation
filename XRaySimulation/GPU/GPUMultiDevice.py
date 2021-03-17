@@ -166,6 +166,18 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
                     # Update the grating idx
                     grating_idx -= 1
 
+                if my_crystal.type == "Prism":
+                    GPUSingleDevice.add_vector[b_num, d_num](cuda_kin_grid,
+                                                             cuda_kin_grid,
+                                                             -my_crystal.wavevec_delta,
+                                                             number_z)
+
+                    # Update the wave number
+                    GPUSingleDevice.get_vector_length[b_num, d_num](cuda_klen_grid,
+                                                                    cuda_kin_grid,
+                                                                    3,
+                                                                    number_z)
+
                 if my_crystal.type == "Crystal: Bragg Reflection":
                     # Calculate the incident wave vector
                     GPUSingleDevice.get_kin_and_jacobian[b_num, d_num](cuda_kin_grid,
@@ -241,6 +253,29 @@ def get_diffracted_spectrum_with_gaussian_source(crystal_list,
                     # Update the grating_idx
                     grating_idx += 1
 
+                if my_crystal.type == "Prism":
+                    # Get the intersection point on the first grating from the initial point
+                    GPUSingleDevice.get_intersection_point[b_num, d_num](cuda_remain_path,
+                                                                         cuda_intersect,
+                                                                         cuda_kin_grid,
+                                                                         cuda_klen_grid,
+                                                                         cuda_remain_path,
+                                                                         cuda_intersect,
+                                                                         my_crystal.surface_point,
+                                                                         my_crystal.normal,
+                                                                         number_z)
+
+                    # Diffracted by the prism
+                    GPUSingleDevice.add_vector[b_num, d_num](cuda_kin_grid,
+                                                             cuda_kin_grid,
+                                                             my_crystal.wavevec_delta,
+                                                             number_z)
+
+                    # Update the wave number
+                    GPUSingleDevice.get_vector_length[b_num, d_num](cuda_klen_grid,
+                                                                    cuda_kin_grid,
+                                                                    3,
+                                                                    number_z)
                 if my_crystal.type == "Crystal: Bragg Reflection":
                     # Get the intersection point from the previous intersection point
                     GPUSingleDevice.get_intersection_point[b_num, d_num](cuda_remain_path,
@@ -826,4 +861,3 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
 ############################################################
 def get_field_with_lens_calculated_exactly():
     pass
-

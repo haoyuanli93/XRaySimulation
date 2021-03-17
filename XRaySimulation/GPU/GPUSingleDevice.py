@@ -445,9 +445,9 @@ def get_bragg_reflection(reflectivity_sigma, reflectivity_pi, kout_grid, efield_
         # ----------------------------------------
 
         # Get the polarization factor with the asymmetric factor b.
-        p_value = complex((kout_x * kin_x +
-                           kout_y * kin_y +
-                           kout_z * kin_z) / (klen ** 2))
+        p_value = complex(1.)  # complex((kout_x * kin_x +
+        # kout_y * kin_y +
+        # kout_z * kin_z) / (klen ** 2))
         bp = b_complex * p_value
 
         # Get sqrt(alpha**2 + beta**2) value

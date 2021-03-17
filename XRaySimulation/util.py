@@ -262,7 +262,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     # ------------------------------------------------------------
 
     # Get the polarization factor with the asymmetric factor b.
-    p_value = np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
+    p_value = complex(1.) #np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
     bp = b_cplx * p_value
 
     # Get sqrt(alpha**2 + beta**2) value
@@ -400,7 +400,7 @@ def get_bragg_rocking_curve(kin, scan_range, scan_number, h_initial, normal_init
     # ------------------------------------------------------------
 
     # Get the polarization factor with the asymmetric factor b.
-    p_value = np.dot(kout_grid, kin) / np.square(klen)
+    p_value = complex(1.)  # np.dot(kout_grid, kin) / np.square(klen)
     bp_array = b_list_cplx * p_value
 
     # Get sqrt(alpha**2 + beta**2) value
@@ -768,7 +768,6 @@ def align_crystal_reciprocal_lattice(crystal, axis):
 
 
 def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
-
     ###########################
     #   Align the recirpocal lattice with kin
     ###########################

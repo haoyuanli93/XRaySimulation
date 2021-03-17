@@ -278,3 +278,19 @@ class RectangleGrating:
         # Update h and wave vector
         self.__update_h()
         self.__update_period_wave_vector()
+
+
+class Prism:
+    def __init__(self,
+                 wavevec_delta=np.array([0, 50677. * 5e-6, 0]),
+                 ):
+        """
+
+        :param wavevec_delta: The width of the groove
+        """
+        self.type = "Prism"
+
+        # Structure info
+        self.wavevec_delta = wavevec_delta  # (um)
+        self.surface_point = np.zeros(3,dtype=np.float64)
+        self.normal = np.array([0, 0, 1], dtype=np.float64)
