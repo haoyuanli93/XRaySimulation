@@ -1823,3 +1823,173 @@ def get_2d_fresnel_diffraction(field_out,
         overall_constant = - 1.j / math.pow((2. * math.pi), 1.5)
         overall_constant *= k_sampling * x_sampling * y_sampling
         field_out[x_idx, y_idx, z_idx] *= overall_constant
+
+
+@cuda.jit('void('
+          'complex128[:,:,:],'
+          'complex128[:,:,:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64,'
+          'complex128,'
+          'complex128,'
+          'complex128,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64)', parallel=True)
+def get_2d_fresnel_diffraction_v2(field_out,
+                                  source,
+                                  k_array,
+                                  x_source_array,
+                                  y_source_array,
+                                  x_target_array,
+                                  y_target_array,
+                                  z_target_array,
+                                  z_ref,
+                                  x_sampling,
+                                  y_sampling,
+                                  k_sampling,
+                                  x_source_num,
+                                  y_source_num,
+                                  k_num,
+                                  x_target_num,
+                                  y_target_num,
+                                  z_target_num):
+    # Calculate diffraction field at different distances in parallel
+    x_idx, y_idx, z_idx = cuda.grid(3)
+
+    if x_idx < x_target_num and z_idx < z_target_num and y_idx < y_target_num:
+
+        z = z_target_array[z_idx]
+        y = y_target_array[y_idx]
+        x = x_target_array[x_idx]
+
+        # Calculate the effect from different wave length
+        for k_idx in range(k_num):
+
+            # Get the factor associated with k and z
+            k = k_array[k_idx]
+
+            kz = k * (z - z_ref)
+            kz_p = complex(k / z_ref)
+            kz_p2 = k / z_ref / 2.
+
+            # Loop through the x and y source points
+            integral = complex(0.)
+            for x_source_idx in range(x_source_num):
+                # Get the phase from x direction
+                phase_angle_1 = (x_source_array[x_source_idx] - x) ** 2
+
+                for y_source_idx in range(y_source_num):
+                    # Get the phase angle from y direction
+                    phase_angle_2 = phase_angle_1 + (y_source_array[y_source_idx] - y) ** 2
+                    phase_angle_2 *= kz_p2
+
+                    # Get the phase
+                    phase = complex(math.cos(phase_angle_2), math.sin(phase_angle_2))
+
+                    # Add to the integration
+                    integral += phase * source[x_source_idx, y_source_idx, k_idx]
+
+            # Get the field
+            integral *= complex(kz_p) * complex(math.cos(kz), math.sin(kz))
+
+            # Add this to the total output field
+            field_out[x_idx, y_idx, z_idx] += integral
+
+        # Add the overall constant to the field
+        overall_constant = - 1.j / math.pow((2. * math.pi), 1.5)
+        overall_constant *= k_sampling * x_sampling * y_sampling
+        field_out[x_idx, y_idx, z_idx] *= overall_constant
+
+
+@cuda.jit('void('
+          'complex128[:,:,:],'
+          'complex128[:,:,:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64[:],'
+          'float64,'
+          'complex128,'
+          'complex128,'
+          'complex128,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64,'
+          'int64)', parallel=True)
+def get_kb_mirror_focusing(field_out,
+                           source,
+                           k_array,
+                           x_source_array,
+                           y_source_array,
+                           x_target_array,
+                           y_target_array,
+                           z_target_array,
+                           z_ref,
+                           x_sampling,
+                           y_sampling,
+                           k_sampling,
+                           x_source_num,
+                           y_source_num,
+                           k_num,
+                           x_target_num,
+                           y_target_num,
+                           z_target_num):
+    # Calculate diffraction field at different distances in parallel
+    x_idx, y_idx, z_idx = cuda.grid(3)
+
+    if x_idx < x_target_num and z_idx < z_target_num and y_idx < y_target_num:
+
+        z = z_target_array[z_idx]
+        y = y_target_array[y_idx]
+        x = x_target_array[x_idx]
+
+        # Calculate the effect from different wave length
+        for k_idx in range(k_num):
+
+            # Get the factor associated with k and z
+            k = k_array[k_idx]
+
+            kz = k * (z - z_ref)
+            kz_p = complex(k / z_ref)
+            kz_p2 = k / z_ref / 2.
+
+            # Loop through the x and y source points
+            integral = complex(0.)
+            for x_source_idx in range(x_source_num):
+                # Get the phase from x direction
+                phase_angle_1 = (x_source_array[x_source_idx] - x) ** 2
+
+                for y_source_idx in range(y_source_num):
+                    # Get the phase angle from y direction
+                    phase_angle_2 = phase_angle_1 + (y_source_array[y_source_idx] - y) ** 2
+                    phase_angle_2 *= kz_p2
+
+                    # Get the phase
+                    phase = complex(math.cos(phase_angle_2), math.sin(phase_angle_2))
+
+                    # Add to the integration
+                    integral += phase * source[x_source_idx, y_source_idx, k_idx]
+
+            # Get the field
+            integral *= complex(kz_p) * complex(math.cos(kz), math.sin(kz))
+
+            # Add this to the total output field
+            field_out[x_idx, y_idx, z_idx] += integral
+
+        # Add the overall constant to the field
+        overall_constant = - 1.j / math.pow((2. * math.pi), 1.5)
+        overall_constant *= k_sampling * x_sampling * y_sampling
+        field_out[x_idx, y_idx, z_idx] *= overall_constant
