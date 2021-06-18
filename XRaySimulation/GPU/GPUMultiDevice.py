@@ -854,10 +854,3 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     field_holder = {"final_spectrum": spec_holder}
 
     return field_holder, reflectivity_holder, sanity_check
-
-
-############################################################
-#  Get simulation with len handled exactly.
-############################################################
-def get_field_with_lens_calculated_exactly():
-    pass

@@ -172,6 +172,37 @@ def get_bragg_kout(kin, h, normal):
     return kout
 
 
+def get_bragg_kout_array(kin, h, normal):
+    """
+    This function produce the output wave vector from a Bragg reflection.
+
+    :param kin: (n, 3) numpy array. The incident wave vector
+    :param h: The reciprocal lattice of the crystal
+    :param normal: The normal direction of the reflection surface.
+                    For a bragg reflection, n is pointing to the inside of the crystal.
+
+    :return: kout: (n, 3) numpy array. The diffraction wave vector.
+    """
+
+    # kout holder
+    kout = kin + h[np.newaxis, :]
+
+    # Incident wave number
+    klen = np.sqrt(np.sum(np.square(kin), axis=-1))
+
+    # Get gamma and alpha
+    gammah = np.dot(kout, normal) / klen
+    alpha = (2 * np.dot(kin, h) + np.dot(h, h)) / np.square(klen)
+
+    # Get the momentum transfer
+    momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
+
+    # Add momentum transfer
+    kout += np.outer(momentum, normal)
+
+    return kout
+
+
 def get_bragg_reflection_array(kin_grid, d, h, n,
                                chi0, chih_sigma, chihbar_sigma,
                                chih_pi, chihbar_pi):
@@ -206,6 +237,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
 
     gamma_0 = np.divide(dot_kn, klen_grid)
     gamma_h = np.divide(dot_kn + dot_hn, klen_grid)
+    print(gamma_h)
 
     b = np.divide(gamma_0, gamma_h)
     b_cplx = b.astype(np.complex128)
@@ -214,11 +246,11 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     # Get momentum tranfer
     sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha)
 
-    mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
-    mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
+    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
+    # mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
 
     m_trans = np.multiply(klen_grid, -gamma_h - sqrt_gamma_alpha)
-    m_trans[mask] = np.multiply(klen_grid[mask], -gamma_h[mask] + sqrt_gamma_alpha[mask])
+    # m_trans[mask] = np.multiply(klen_grid[mask], -gamma_h[mask] + sqrt_gamma_alpha[mask])
 
     # Update the kout_grid
     kout_grid[:, 0] = kin_grid[:, 0] + h[0] + m_trans * n[0]
@@ -262,7 +294,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     # ------------------------------------------------------------
 
     # Get the polarization factor with the asymmetric factor b.
-    p_value = complex(1.) #np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
+    p_value = complex(1.)  # np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
     bp = b_cplx * p_value
 
     # Get sqrt(alpha**2 + beta**2) value
@@ -998,3 +1030,19 @@ def get_axes_3d(numbers, resolutions):
         holder['wavevec axis'].update({axis_name[idx]: np.copy(tmp_wavenum)})
 
     return holder
+
+
+def get_fft_mesh_2d(dy, ny, yc, dz, nz, zc):
+    # get the y axis
+    ky_list = np.fft.fftshift(np.fft.fftfreq(ny, d=dy) * 2 * np.pi)
+    ky_list += yc
+
+    # Get the z axis
+    kz_list = np.fft.fftshift(np.fft.fftfreq(nz, d=dz) * 2 * np.pi)
+    kz_list += zc
+
+    k_grid = np.zeros((ny, nz, 3), dtype=np.float64)
+    k_grid[:, :, 1] = ky_list[:, np.newaxis]
+    k_grid[:, :, 2] = kz_list[np.newaxis, :]
+
+    return k_grid
