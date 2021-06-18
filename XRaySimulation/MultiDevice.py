@@ -279,3 +279,8 @@ def get_output_efficiency_curve(device_list, kin_list):
         total_efficiency_holder[idx] = total_efficiency
 
     return total_efficiency_holder, efficiency_holder, kout_holder
+
+
+#################################################################
+#       Get a compressor
+#################################################################
