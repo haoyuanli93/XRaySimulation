@@ -1303,9 +1303,9 @@ def get_relative_spatial_phase(phase, source_point, reference_point, k_vec, k_re
     """
     idx = cuda.grid(1)
     if idx < num:
-        tmp = ((k_vec[idx, 0] - k_ref[0]) * (-source_point[idx, 0] + reference_point[0]) +
-               (k_vec[idx, 1] - k_ref[1]) * (-source_point[idx, 1] + reference_point[1]) +
-               (k_vec[idx, 2] - k_ref[2]) * (-source_point[idx, 2] + reference_point[2]))
+        tmp = ((k_vec[idx, 0] - k_ref[0]) * (source_point[idx, 0] - reference_point[0]) +
+               (k_vec[idx, 1] - k_ref[1]) * (source_point[idx, 1] - reference_point[1]) +
+               (k_vec[idx, 2] - k_ref[2]) * (source_point[idx, 2] - reference_point[2]))
 
         phase[idx] = complex(math.cos(tmp), math.sin(tmp))
 

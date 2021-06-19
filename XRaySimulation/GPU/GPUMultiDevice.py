@@ -839,7 +839,6 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     # Create result dictionary
 
     sanity_check = {"intersect_points": intersect_points,
-                    "component_final_points": component_final_points,
                     "remaining_length": remaining_length,
                     "phase_grid": phase_grid,
                     "final_point": component_final_points,
