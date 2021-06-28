@@ -773,13 +773,17 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_position, foc
 # -------------------------------------------------------------
 #               Alignment
 # -------------------------------------------------------------
-def align_crystal_reciprocal_lattice(crystal, axis):
+def align_crystal_reciprocal_lattice(crystal, axis, rot_center=None):
     """
 
     :param crystal: The crystal to align
     :param axis: The direction along which the reciprocal lattice will be aligned.
+    :param rot_center:
     :return:
     """
+    if rot_center is None:
+        rot_center = crystal.surface_point
+
     # 1 Get the angle
     cos_val = np.dot(axis, crystal.h) / l2_norm(axis) / l2_norm(crystal.h)
     rot_angle = np.arccos(np.clip(cos_val, -1, 1))
@@ -796,14 +800,17 @@ def align_crystal_reciprocal_lattice(crystal, axis):
         rot_mat = rot_mat_in_yz_plane(theta=-rot_angle)
 
     crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=crystal.surface_point)
+                             ref_point=rot_center)
 
 
-def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
+def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1, rot_center=None):
+    if rot_center is None:
+        rot_center = crystal.surface_point
+
     ###########################
     #   Align the recirpocal lattice with kin
     ###########################
-    align_crystal_reciprocal_lattice(crystal=crystal, axis=kin)
+    align_crystal_reciprocal_lattice(crystal=crystal, axis=kin, rot_center=rot_center)
     # print(crystal.h)
 
     ###########################
@@ -819,12 +826,12 @@ def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1):
     rot_mat = rot_mat_in_yz_plane(theta=(bragg_estimation + np.pi / 2) * rot_direction)
 
     crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=crystal.surface_point)
+                             ref_point=rot_center)
 
 
 def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
                                              scan_range=0.0005, scan_number=10000,
-                                             ):
+                                             rot_center=None):
     """
     Align the crystal such that the incident wave vector is at the center of the
     reflectivity curve
@@ -836,8 +843,14 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
     :param scan_number:
     :return:
     """
+    if rot_center is None:
+        rot_center = crystal.surface_point
+
     # Align the crystal with geometric bragg reflection theory
-    align_crystal_geometric_bragg_reflection(crystal=crystal, kin=kin, rot_direction=rot_direction)
+    align_crystal_geometric_bragg_reflection(crystal=crystal,
+                                             kin=kin,
+                                             rot_direction=rot_direction,
+                                             rot_center=rot_center)
 
     # Align the crystal with dynamical diffraction theory
     (angles,
@@ -866,9 +879,7 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
     # Fourth: Align the crystal along that direction.
     rot_mat = rot_mat_in_yz_plane(theta=angle_adjust)
     crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=crystal.surface_point)
-
-    # return rocking_curve, angles
+                             ref_point=rot_center)
 
 
 def align_grating_normal_direction(grating, axis):
