@@ -120,7 +120,7 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
     return intersection_list, kout_list, path_length
 
 
-def get_trajectory(device_list, kin, initial_point, final_plane_point, final_plane_normal):
+def get_trajectory(device_list, kin, initial_point, path_length):
     """
     This function is used to generate the light path of the incident wave vector in the series of
     devices.
@@ -130,8 +130,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
     :param device_list:
     :param kin:
     :param initial_point:
-    :param final_plane_normal:
-    :param final_plane_point:
+    :param path_length:
     :return:
     """
 
@@ -140,9 +139,6 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
 
     # Create a list for the intersection points
     intersection_list = [np.copy(initial_point)]
-
-    # Path length
-    path_length = 0.
 
     # Loop through all the devices.
     for idx in range(len(device_list)):
@@ -160,7 +156,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
                                                            surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
-            path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
+            path_length -= np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
 
             # Find the output k vector
             kout_list.append(util.get_bragg_kout(kin=kout_list[-1],
@@ -174,7 +170,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
                                                            surface_point=device.surface_point))
             # Find the path length
             displacement = intersection_list[-1] - intersection_list[-2]
-            path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
+            path_length -= np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
 
             # Find the wave vecotr
             kout_list.append(kout_list[-1] + device.momentum_transfer)
@@ -205,13 +201,7 @@ def get_trajectory(device_list, kin, initial_point, final_plane_point, final_pla
 
     ################################################################
     # Step 3: Find the output position on the observation plane
-    intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
-                                                   k=kout_list[-1],
-                                                   surface_point=final_plane_point,
-                                                   normal=final_plane_normal))
-    # Update the path length
-    displacement = intersection_list[-1] - intersection_list[-2]
-    path_length += np.dot(displacement, kout_list[-1]) / util.l2_norm(kout_list[-1])
+    intersection_list.append(intersection_list[-1] + kout_list[-1] / util.l2_norm(kout_list[-1]) * path_length)
 
     return intersection_list, kout_list
 

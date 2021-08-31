@@ -147,6 +147,24 @@ def scalar_vector_elementwise_multiply_complex(scalar_grid, vec, vec_grid, num):
         vec_grid[idx, 2] = scalar_grid[idx] * vec[idx, 2]
 
 
+@cuda.jit("void(float64[:], complex128[:,:], complex128[:,:], int64)")
+def add_phase_to_spectrum(phase_real, vec, vec_grid, num):
+    """
+
+    :param phase_real:
+    :param vec:
+    :param vec_grid:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        phase = complex(math.cos(phase_real[idx]), math.sin(phase_real[idx]))
+        vec_grid[idx, 0] = phase * vec[idx, 0]
+        vec_grid[idx, 1] = phase * vec[idx, 1]
+        vec_grid[idx, 2] = phase * vec[idx, 2]
+
+
 @cuda.jit("void(complex128[:,:], complex128[:], complex128[:], complex128[:], int64)")
 def vector_expansion(vector, x, y, z, num):
     """
@@ -722,128 +740,6 @@ def get_bragg_reflection_with_jacobian(reflectivity_sigma, reflectivity_pi, kout
           'float64, float64,'
           'complex128, complex128, complex128,'
           'int64)')
-def get_bragg_reflection_sigma_polarization(reflectivity_sigma,
-                                            kout_grid,
-                                            efield_grid,
-                                            jacobian,
-                                            klen_grid,
-                                            kin_grid,
-                                            d,
-                                            h,
-                                            n,
-                                            dot_hn,
-                                            h_square,
-                                            chi0, chih_sigma,
-                                            chihbar_sigma, num):
-    """
-    Given the crystal info, the input electric field, this function returns the
-    reflectivity for the sigma polarization and pi polarization and the
-    diffracted electric field.
-
-    :param reflectivity_sigma:
-    :param kout_grid:
-    :param efield_grid:
-    :param jacobian:
-    :param klen_grid:
-    :param kin_grid:
-    :param d:
-    :param h:
-    :param n:
-    :param dot_hn:
-    :param h_square:
-    :param chi0:
-    :param chih_sigma:
-    :param chihbar_sigma:
-    :param num:
-    :return:
-    """
-    idx = cuda.grid(1)
-    if idx < num:
-
-        #####################################################################################################
-        # Step 1: Get parameters for reflectivity and decompose input field
-        #####################################################################################################
-        # ------------------------------------
-        #     Get the diffracted wave number
-        # ------------------------------------
-        # Get k components
-        kin_x = kin_grid[idx, 0]
-        kin_y = kin_grid[idx, 1]
-        kin_z = kin_grid[idx, 2]
-        klen = klen_grid[idx]
-
-        # Get gamma and alpha and b
-        dot_kn = kin_x * n[0] + kin_y * n[1] + kin_z * n[2]
-        dot_kh = kin_x * h[0] + kin_y * h[1] + kin_z * h[2]
-
-        gamma_0 = dot_kn / klen
-        gamma_h = (dot_kn + dot_hn) / klen
-        b = gamma_0 / gamma_h
-        b_complex = complex(b)
-        alpha = (2 * dot_kh + h_square) / (klen ** 2)
-
-        # Get momentum tranfer
-        sqrt_gamma_alpha = math.sqrt(gamma_h ** 2 - alpha)
-        m_trans = klen * (-gamma_h - sqrt_gamma_alpha)
-
-        # Get output wave vector
-        kout_x = kin_x + h[0] + m_trans * n[0]
-        kout_y = kin_y + h[1] + m_trans * n[1]
-        kout_z = kin_z + h[2] + m_trans * n[2]
-
-        # Update the kout_grid
-        kout_grid[idx, 0] = kout_x
-        kout_grid[idx, 1] = kout_y
-        kout_grid[idx, 2] = kout_z
-
-        # Get the jacobian :   dot(kout, n) / dot(kin, n)
-        jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
-
-        #####################################################################################################
-        # Step 2: Get the reflectivity and field
-        #####################################################################################################
-        # Get alpha tidle
-        alpha_tidle = complex((alpha * b + chi0.real * (1. - b)) / 2., chi0.imag * (1. - b) / 2.)
-
-        # Get sqrt(alpha**2 + beta**2) value
-        sqrt_a2_b2 = cmath.sqrt(alpha_tidle ** 2 + b_complex * chih_sigma * chihbar_sigma)
-
-        if sqrt_a2_b2.imag < 0:
-            sqrt_a2_b2 = - sqrt_a2_b2
-
-        # Calculate the phase term
-        re = klen * d / gamma_0 * sqrt_a2_b2.real
-        im = klen * d / gamma_0 * sqrt_a2_b2.imag
-
-        # Take care of the exponential
-        if im <= 400.:
-            magnitude = complex(math.exp(-im))
-
-            phase = complex(math.cos(re), math.sin(re))
-            # Calculate some intermediate part
-            numerator = 1. - magnitude * phase
-            denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
-
-            # Assemble everything
-            reflectivity_sigma[idx] = b_complex * chih_sigma * numerator / denominator
-        else:
-            # When the crystal is super thick, the numerator becomes 1 The exponential term becomes 0.
-            # Calculate some intermediate part
-            denominator = alpha_tidle + sqrt_a2_b2
-
-            # Assemble everything
-            reflectivity_sigma[idx] = b_complex * chih_sigma / denominator
-
-        # Get the field
-        efield_grid[idx] *= reflectivity_sigma[idx]
-
-
-@cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
-          'float64[:], float64[:,:],'
-          'float64, float64[:], float64[:],'
-          'float64, float64,'
-          'complex128, complex128, complex128,'
-          'int64)')
 def get_thick_bragg_reflection_sigma_polarization(reflectivity_sigma,
                                                   kout_grid,
                                                   efield_grid,
@@ -1211,6 +1107,123 @@ def get_intersection_point(path_length_remain,
         path_length_remain[idx] = path_length[idx] - distance
 
 
+@cuda.jit("void(float64[:], float64[:,:],"
+          "float64[:,:], float64[:], float64[:],"
+          "float64[:,:], float64[:], float64[:], int64)")
+def get_intersection_point(path_length_remain,
+                           intersect_point,
+                           kvec_grid,
+                           klen_gird,
+                           path_length,
+                           source_point,
+                           surface_position,
+                           surface_normal,
+                           num):
+    """
+    This function trace down the intersection point of the previous reflection plane.
+    Then calculate the distance and then calculate the remaining distance to go
+    to get to the initial point of this k component.
+
+    Notice that, if the intersection point is along the positive direction of the
+    propagation direction, then the path length is calculated to be positive.
+    If the intersection point is along the negative direction of the propagation
+    direction, then the path length is calculated to be negative.
+
+    :param path_length_remain:
+    :param intersect_point:
+    :param kvec_grid: The incident k vector. Notice that I need this for all the
+                    reflections. Therefore, I can not pre define kv ** 2 + ku ** 2
+                    to reduce calculation
+    :param klen_gird: Notice that all the reflections does not change the length
+                        of the wave vectors. Therefore, I do not need to calculate
+                        this value again and again.
+    :param path_length:
+    :param source_point:
+    :param surface_position:
+    :param surface_normal:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        # Get the coefficient before K
+        coef_k = (surface_normal[0] * (surface_position[0] - source_point[idx, 0]) +
+                  surface_normal[1] * (surface_position[1] - source_point[idx, 1]) +
+                  surface_normal[2] * (surface_position[2] - source_point[idx, 2]))
+        coef_k /= (surface_normal[0] * kvec_grid[idx, 0] +
+                   surface_normal[1] * kvec_grid[idx, 1] +
+                   surface_normal[2] * kvec_grid[idx, 2])
+
+        # Assign the value
+        intersect_point[idx, 0] = source_point[idx, 0] + coef_k * kvec_grid[idx, 0]
+        intersect_point[idx, 1] = source_point[idx, 1] + coef_k * kvec_grid[idx, 1]
+        intersect_point[idx, 2] = source_point[idx, 2] + coef_k * kvec_grid[idx, 2]
+
+        # Get the distance change
+        distance = coef_k * klen_gird[idx]
+        path_length_remain[idx] = path_length[idx] - distance
+
+
+@cuda.jit("void(float64[:], float64[:], float64[:,:],"
+          "float64[:,:], float64[:], "
+          "float64[:,:], float64[:], float64[:], int64)")
+def get_intersection_point_with_evolution_phase(phase_real_grid,
+                                                path_length_remain,
+                                                intersect_point,
+                                                kvec_grid,
+                                                klen_gird,
+                                                source_point,
+                                                surface_position,
+                                                surface_normal,
+                                                num):
+    """
+    This function trace down the intersection point of the previous reflection plane.
+    Then calculate the distance and then calculate the remaining distance to go
+    to get to the initial point of this k component.
+
+    Notice that, if the intersection point is along the positive direction of the
+    propagation direction, then the path length is calculated to be positive.
+    If the intersection point is along the negative direction of the propagation
+    direction, then the path length is calculated to be negative.
+
+    :param phase_real_grid: This quantity contains the propagation phase of this specific components
+                            The reason that I need to keep track of this is that
+                            grating and prism can change the frequency.
+    :param intersect_point:
+    :param kvec_grid: The incident k vector. Notice that I need this for all the
+                    reflections. Therefore, I can not pre define kv ** 2 + ku ** 2
+                    to reduce calculation
+    :param klen_gird: Notice that all the reflections does not change the length
+                        of the wave vectors. Therefore, I do not need to calculate
+                        this value again and again.
+    :param source_point:
+    :param path_length_remain
+    :param surface_position:
+    :param surface_normal:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        # Get the coefficient before K
+        coef_k = (surface_normal[0] * (surface_position[0] - source_point[idx, 0]) +
+                  surface_normal[1] * (surface_position[1] - source_point[idx, 1]) +
+                  surface_normal[2] * (surface_position[2] - source_point[idx, 2]))
+        coef_k /= (surface_normal[0] * kvec_grid[idx, 0] +
+                   surface_normal[1] * kvec_grid[idx, 1] +
+                   surface_normal[2] * kvec_grid[idx, 2])
+
+        # Assign the value
+        intersect_point[idx, 0] = source_point[idx, 0] + coef_k * kvec_grid[idx, 0]
+        intersect_point[idx, 1] = source_point[idx, 1] + coef_k * kvec_grid[idx, 1]
+        intersect_point[idx, 2] = source_point[idx, 2] + coef_k * kvec_grid[idx, 2]
+
+        # Get the distance change
+        distance = coef_k * klen_gird[idx]
+        path_length_remain[idx] -= distance
+        phase_real_grid[idx] -= klen_gird[idx] * distance
+
+
 @cuda.jit("void(float64[:,:], float64[:,:], float64[:,:], float64[:], float64[:], int64)")
 def get_source_point(source_point, end_point, kvec_grid, klen_grid, path_length, num):
     """
@@ -1257,8 +1270,8 @@ def get_final_point(final_point, end_point, kvec_grid, klen_grid, path_length, n
         final_point[idx, 2] = end_point[idx, 2] + coef * kvec_grid[idx, 2]
 
 
-@cuda.jit("void(complex128[:], float64[:,:], float64[:], float64[:,:], int64)")
-def get_spatial_phase(phase, source_point, reference_point, k_vec, num):
+@cuda.jit("void(float64[:], float64[:], float64[:,:], int64)")
+def add_spatial_phase(phase, displacement, k_vec, num):
     """
     At present, I assume that the reference point is the same for all the components
     Then this function, calculate the relative phase of this wave component at the
@@ -1268,23 +1281,20 @@ def get_spatial_phase(phase, source_point, reference_point, k_vec, num):
     take the fourier transformation of the gaussian field at the x0 position at time t=0
 
     :param phase:
-    :param source_point:
-    :param reference_point:
+    :param displacement:
     :param k_vec:
     :param num:
     :return:
     """
     idx = cuda.grid(1)
     if idx < num:
-        tmp = (k_vec[idx, 0] * (source_point[idx, 0] - reference_point[0]) +
-               k_vec[idx, 1] * (source_point[idx, 1] - reference_point[1]) +
-               k_vec[idx, 2] * (source_point[idx, 2] - reference_point[2]))
-
-        phase[idx] = complex(math.cos(tmp), math.sin(tmp))
+        phase[idx] += (k_vec[idx, 0] * displacement[0] +
+                       k_vec[idx, 1] * displacement[1] +
+                       k_vec[idx, 2] * displacement[2])
 
 
-@cuda.jit("void(complex128[:], float64[:,:], float64[:], float64[:,:], float64[:], int64)")
-def get_relative_spatial_phase(phase, source_point, reference_point, k_vec, k_ref, num):
+@cuda.jit("void(float64[:], float64, float64[:], int64)")
+def add_evolution_phase(phase, path_length, k_len, num):
     """
     At present, I assume that the reference point is the same for all the components
     Then this function, calculate the relative phase of this wave component at the
@@ -1292,6 +1302,72 @@ def get_relative_spatial_phase(phase, source_point, reference_point, k_vec, k_re
 
     The phase at the reference point is the phase that we have obtained when we
     take the fourier transformation of the gaussian field at the x0 position at time t=0
+
+    :param phase:
+    :param path_length:
+    :param k_len:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        phase[idx] -= path_length * k_len[idx] * c
+
+
+@cuda.jit("void(float64[:], float64[:], float64[:], int64)")
+def add_evolution_phase_elementwise(phase, path_length, k_len, num):
+    """
+    At present, I assume that the reference point is the same for all the components
+    Then this function, calculate the relative phase of this wave component at the
+    source point with respect to the reference point.
+
+    The phase at the reference point is the phase that we have obtained when we
+    take the fourier transformation of the gaussian field at the x0 position at time t=0
+
+    :param phase:
+    :param path_length:
+    :param k_len:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        phase[idx] -= path_length[idx] * k_len[idx] * c
+
+
+@cuda.jit("void(complex128[:], float64[:,:], float64[:], float64[:,:], float64[:], int64)")
+def get_relative_spatial_phase(phase, source_point, reference_point, k_vec, k_ref, num):
+    """
+    I keep it here only for the completeness of this package.
+    This is not recommended.
+
+    :param phase:
+    :param source_point:
+    :param reference_point:
+    :param k_vec:
+    :param k_ref:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        tmp = ((k_vec[idx, 0] - k_ref[0]) * (source_point[idx, 0] - reference_point[0]) +
+               (k_vec[idx, 1] - k_ref[1]) * (source_point[idx, 1] - reference_point[1]) +
+               (k_vec[idx, 2] - k_ref[2]) * (source_point[idx, 2] - reference_point[2]))
+        tmp /= -2.  # This function is obselete. However,  If anyone would want to use this.
+        # This factor is important.
+        phase[idx] = complex(math.cos(tmp), math.sin(tmp))
+
+
+@cuda.jit("void(complex128[:], float64[:,:], float64[:], float64[:,:], float64[:], int64)")
+def get_relative_spatial_phase_backup(phase, source_point, reference_point, k_vec, k_ref, num):
+    """
+    This is an ancient function. It is obselete now. Also, it is wrong.
+    I keep it here only for record.
+
+    This is an old function which aims to calculate the propagation phase.
+    However, I realized that this function might be wrong. Therefore
+    I put it here.
 
     :param phase:
     :param source_point:
@@ -1936,7 +2012,7 @@ def get_2d_fresnel_diffraction(field_out,
                     integral += phase * source[x_source_idx, y_source_idx, k_idx]
 
             # Get the field
-            integral *= complex(kz_p) * complex(math.cos(kz), math.sin(kz))
+            integral *= kz_p * complex(math.cos(kz), math.sin(kz))
 
             # Add this to the total output field
             field_out[x_idx, y_idx, z_idx] += integral
@@ -1965,7 +2041,7 @@ def get_2d_fresnel_diffraction(field_out,
           'int64,'
           'int64,'
           'int64,'
-          'int64)', parallel=True)
+          'int64)')
 def get_2d_fresnel_diffraction_v2(field_out,
                                   source,
                                   k_array,
@@ -2021,92 +2097,7 @@ def get_2d_fresnel_diffraction_v2(field_out,
                     integral += phase * source[x_source_idx, y_source_idx, k_idx]
 
             # Get the field
-            integral *= complex(kz_p) * complex(math.cos(kz), math.sin(kz))
-
-            # Add this to the total output field
-            field_out[x_idx, y_idx, z_idx] += integral
-
-        # Add the overall constant to the field
-        overall_constant = - 1.j / math.pow((2. * math.pi), 1.5)
-        overall_constant *= k_sampling * x_sampling * y_sampling
-        field_out[x_idx, y_idx, z_idx] *= overall_constant
-
-
-@cuda.jit('void('
-          'complex128[:,:,:],'
-          'complex128[:,:,:],'
-          'float64[:],'
-          'float64[:],'
-          'float64[:],'
-          'float64[:],'
-          'float64[:],'
-          'float64[:],'
-          'float64,'
-          'complex128,'
-          'complex128,'
-          'complex128,'
-          'int64,'
-          'int64,'
-          'int64,'
-          'int64,'
-          'int64,'
-          'int64)', parallel=True)
-def get_kb_mirror_focusing(field_out,
-                           source,
-                           k_array,
-                           x_source_array,
-                           y_source_array,
-                           x_target_array,
-                           y_target_array,
-                           z_target_array,
-                           z_ref,
-                           x_sampling,
-                           y_sampling,
-                           k_sampling,
-                           x_source_num,
-                           y_source_num,
-                           k_num,
-                           x_target_num,
-                           y_target_num,
-                           z_target_num):
-    # Calculate diffraction field at different distances in parallel
-    x_idx, y_idx, z_idx = cuda.grid(3)
-
-    if x_idx < x_target_num and z_idx < z_target_num and y_idx < y_target_num:
-
-        z = z_target_array[z_idx]
-        y = y_target_array[y_idx]
-        x = x_target_array[x_idx]
-
-        # Calculate the effect from different wave length
-        for k_idx in range(k_num):
-
-            # Get the factor associated with k and z
-            k = k_array[k_idx]
-
-            kz = k * (z - z_ref)
-            kz_p = complex(k / z_ref)
-            kz_p2 = k / z_ref / 2.
-
-            # Loop through the x and y source points
-            integral = complex(0.)
-            for x_source_idx in range(x_source_num):
-                # Get the phase from x direction
-                phase_angle_1 = (x_source_array[x_source_idx] - x) ** 2
-
-                for y_source_idx in range(y_source_num):
-                    # Get the phase angle from y direction
-                    phase_angle_2 = phase_angle_1 + (y_source_array[y_source_idx] - y) ** 2
-                    phase_angle_2 *= kz_p2
-
-                    # Get the phase
-                    phase = complex(math.cos(phase_angle_2), math.sin(phase_angle_2))
-
-                    # Add to the integration
-                    integral += phase * source[x_source_idx, y_source_idx, k_idx]
-
-            # Get the field
-            integral *= complex(kz_p) * complex(math.cos(kz), math.sin(kz))
+            integral *= kz_p * complex(math.cos(kz), math.sin(kz))
 
             # Add this to the total output field
             field_out[x_idx, y_idx, z_idx] += integral

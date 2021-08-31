@@ -237,7 +237,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
 
     gamma_0 = np.divide(dot_kn, klen_grid)
     gamma_h = np.divide(dot_kn + dot_hn, klen_grid)
-    print(gamma_h)
+    #print(gamma_h)
 
     b = np.divide(gamma_0, gamma_h)
     b_cplx = b.astype(np.complex128)
@@ -831,7 +831,8 @@ def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1, rot_
 
 def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
                                              scan_range=0.0005, scan_number=10000,
-                                             rot_center=None):
+                                             rot_center=None,
+                                             get_curve=False):
     """
     Align the crystal such that the incident wave vector is at the center of the
     reflectivity curve
@@ -841,6 +842,8 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
     :param rot_direction:
     :param scan_range:
     :param scan_number:
+    :param rot_center:
+    :param get_curve:
     :return:
     """
     if rot_center is None:
@@ -880,6 +883,8 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
     rot_mat = rot_mat_in_yz_plane(theta=angle_adjust)
     crystal.rotate_wrt_point(rot_mat=rot_mat,
                              ref_point=rot_center)
+    if get_curve:
+        return angles, np.square(np.abs(reflect_s))
 
 
 def align_grating_normal_direction(grating, axis):

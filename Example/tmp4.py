@@ -7,7 +7,7 @@ grating_period = 1.
 
 
 def get_grating_and_crystals():
-    energy_center = 9.5
+    energy_center = 9.8
     pre_length = 1e6
 
     # Set up the pulse
@@ -40,11 +40,11 @@ def get_grating_and_crystals():
     h_length = 2. * np.pi / (1.9201 * 1e-4)
 
     # Some crystal properties
-    chi_dict = {"chi0": complex(-0.97631E-05, 0.14871E-06),
-                "chih_sigma": complex(0.59310E-05, -0.14320E-06),
-                "chihbar_sigma": complex(0.59310E-05, -0.14320E-06),
-                "chih_pi": complex(0.46945E-05, -0.11201E-06),
-                "chihbar_pi": complex(0.46945E-05, -0.11201E-06),
+    chi_dict = {"chi0": complex(-0.10169E-04, 0.16106E-06),
+                "chih_sigma": complex(0.61786E-05, -0.15508E-06),
+                "chihbar_sigma": complex(0.61786E-05, -0.15508E-06),
+                "chih_pi": complex(0.48374E-05, -0.11996E-06),
+                "chihbar_pi": complex(0.48374E-05, -0.11996E-06),
                 }
 
     # Get crystal_list
@@ -52,7 +52,7 @@ def get_grating_and_crystals():
 
     rhos = thetas + np.pi
     rhos[[1, 6]] -= np.deg2rad(5)
-    rhos[[2, 5]] += np.deg2rad(5.02)
+    rhos[[2, 5]] += np.deg2rad(5)
 
     vcc_crystals = [Crystal.CrystalBlock3D(h=np.array([0, np.sin(thetas[x]), np.cos(thetas[x])]) * h_length,
                                            normal=np.array([0., np.sin(rhos[x]), np.cos(rhos[x])]),
@@ -193,6 +193,59 @@ def get_grating_and_crystals():
     cc_crystals[3].set_surface_point(np.copy(cc_crystals[3].boundary[0]))
 
     return my_pulse, grating_list, vcc_crystals, cc_crystals
+
+
+def get_analyzer():
+    ####################################################################
+    #     sampler
+    ####################################################################
+    # Define physical parameters
+    h_length = 2. * np.pi / (1.9201 * 1e-4)
+
+    # Some crystal properties
+    chi_dict = {"chi0": complex(-0.10169E-04, 0.16106E-06),
+                "chih_sigma": complex(0.61786E-05, -0.15508E-06),
+                "chihbar_sigma": complex(0.61786E-05, -0.15508E-06),
+                "chih_pi": complex(0.48374E-05, -0.11996E-06),
+                "chihbar_pi": complex(0.48374E-05, -0.11996E-06),
+                }
+
+    # Get crystal_list
+    thetas = np.pi / 2.
+
+    rhos = thetas + np.pi
+
+    sampler = Crystal.CrystalBlock3D(h=np.array([0, np.sin(thetas), np.cos(thetas)]) * h_length,
+                                     normal=np.array([0., np.sin(rhos), np.cos(rhos)]),
+                                     surface_point=np.zeros(3),
+                                     thickness=1e6,
+                                     chi_dict=chi_dict)
+
+    ####################################################################
+    #     Analyzer
+    ####################################################################
+    # Define physical parameters
+    h_length = 2. * np.pi / (1.9201 * 1e-4)
+
+    # Some crystal properties
+    chi_dict = {"chi0": complex(-0.10169E-04, 0.16106E-06),
+                "chih_sigma": complex(0.21718E-05, -0.12003E-06),
+                "chihbar_sigma": complex(0.21718E-05, -0.12003E-06),
+                "chih_pi": complex(0.20711E-05, -0.11420E-06),
+                "chihbar_pi": complex(0.20711E-05, -0.11420E-06),
+                }
+
+    # Get crystal_list
+    thetas = np.pi / 2.
+    rhos = thetas + np.pi
+
+    analyzer = Crystal.CrystalBlock3D(h=np.array([0, np.sin(thetas), np.cos(thetas)]) * h_length,
+                                      normal=np.array([0., np.sin(rhos), np.cos(rhos)]),
+                                      surface_point=np.zeros(3),
+                                      thickness=1e6,
+                                      chi_dict=chi_dict)
+
+    return sampler, analyzer
 
 
 def align_vcc_crystals(kin, crystals):
@@ -419,7 +472,16 @@ def get_trajectory(vcc_motion=np.zeros(8), cc_motion=np.zeros(4)):
     cc_trajectory = np.vstack(cc_trajectory)
     cc_kout_list = np.vstack(cc_kout_list)
 
-    return vcc_trajectory, vcc_kout_list, vcc_path, vcc_crystals, cc_trajectory, cc_kout_list, cc_path, cc_crystals
+    return (vcc_trajectory,
+            vcc_kout_list,
+            vcc_path,
+            vcc_crystals,
+            cc_trajectory,
+            cc_kout_list,
+            cc_path,
+            cc_crystals,
+            grating_list,
+            my_pulse)
 
 
 def tweak_horizontal_position_ratio(vcc_motion=np.zeros(8, dtype=np.float64),
@@ -481,4 +543,3 @@ def tweak_temporal_overlap(vcc_motion=np.zeros(8, dtype=np.float64),
     tweak_size = (current_config[6] - current_config[2]) / temporal_shift_per_um
     print("To get two pulse overlap, t23 should move {:.2f} um".format(tweak_size))
     return tweak_size
-

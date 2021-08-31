@@ -279,6 +279,23 @@ class RectangleGrating:
         self.__update_h()
         self.__update_period_wave_vector()
 
+    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=True):
+        """
+        This is a function designed
+        :param rot_mat:
+        :param ref_point:
+        :param include_boundary:
+        :return:
+        """
+        # Step 1: shift with respect to that point
+        self.shift(displacement=-ref_point)
+
+        # Step 2: rotate the quantities
+        self.rotate(rot_mat=rot_mat)
+
+        # Step 3: shift it back to the reference point
+        self.shift(displacement=ref_point)
+
 
 class Prism:
     def __init__(self,
@@ -292,5 +309,5 @@ class Prism:
 
         # Structure info
         self.wavevec_delta = wavevec_delta  # (um)
-        self.surface_point = np.zeros(3,dtype=np.float64)
+        self.surface_point = np.zeros(3, dtype=np.float64)
         self.normal = np.array([0, 0, 1], dtype=np.float64)
