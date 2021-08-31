@@ -10,43 +10,32 @@ from XRaySimulation.GPU import GPUSingleDevice
 ########################################################################################################################
 #        For arbitrary incident scalar spectrum, only consider the sigma polarization
 ########################################################################################################################
-def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
+def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
                                                                spectrum_in,
                                                                device_list,
                                                                total_path,
-                                                               reference_trajectory,
-                                                               observation,
-                                                               initial_position,
-                                                               pulse_k0_final,
+                                                               ref_trajectory,
                                                                d_num=512):
     """
-    I am afraid that my previous version consumes too much memory.
-    Therefore, I create the following scalar version. This assumes that the
-    incident field is completely sigma polarization.
+    This function assume that the incident beam is of sigma polarization
+    and does not include polarization mixing effect.
 
-    This saves a lot of memory and simplifies the calculation.
-
-    :param k_grid:
+    :param kin_grid:
     :param spectrum_in:
     :param device_list:
     :param total_path:
-    :param observation:
-    :param initial_position:
-    :param pulse_k0_final:
+    :param ref_trajectory: This is a (n,3) numpy array. It contains the trajectory of the center of the beam
+                            through the setup.
     :param d_num:
     :return:
     """
     ############################################################################################################
-    # ----------------------------------------------------------------------------------------------------------
-    #
     #                      Step 1: Create holders and get prepared for the simulation
-    #
-    # ----------------------------------------------------------------------------------------------------------
     ############################################################################################################
     device_num = len(device_list)
 
     # Get meta data
-    k_num = k_grid.shape[0]
+    k_num = kin_grid.shape[0]
 
     tic = time.time()
 
@@ -54,13 +43,13 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     #  Various intersection points, path length and phase
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     intersect_points = np.ascontiguousarray(np.zeros((k_num, 3), dtype=np.float64))
-    intersect_points[:, 0] = initial_position[0]
-    intersect_points[:, 1] = initial_position[1]
-    intersect_points[:, 2] = initial_position[2]
+    intersect_points[:, 0] = ref_trajectory[0, 0]
+    intersect_points[:, 1] = ref_trajectory[0, 1]
+    intersect_points[:, 2] = ref_trajectory[0, 2]
 
     component_final_points = np.ascontiguousarray(np.zeros((k_num, 3), dtype=np.float64))
     remaining_length = np.ascontiguousarray(np.zeros(k_num, dtype=np.float64) + total_path)
-    phase_grid = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
+    phase_grid = np.ascontiguousarray(np.ones(k_num, dtype=np.float64))
     jacobian_grid = np.ascontiguousarray(np.ones(k_num, dtype=np.complex128))
 
     cuda_intersect = cuda.to_device(intersect_points)
@@ -88,7 +77,7 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #  [1D slices] k grid
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    kin_grid = np.ascontiguousarray(k_grid)
+    kin_grid = np.ascontiguousarray(kin_grid)
     klen_grid = np.ascontiguousarray(util.l2_norm_batch(kin_grid))
 
     cuda_kin_grid = cuda.to_device(kin_grid)
@@ -98,11 +87,7 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     print("It takes {:.2f} seconds to prepare the variables.".format(toc - tic))
 
     ############################################################################################################
-    # ----------------------------------------------------------------------------------------------------------
-    #
     #                           Step 2: Calculate the field and save the data
-    #
-    # ----------------------------------------------------------------------------------------------------------
     ############################################################################################################
     # d_num = 512
     b_num = (k_num + d_num - 1) // d_num
@@ -113,69 +98,101 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     for device_idx in range(device_num):
         my_device = device_list[device_idx]
 
+        # Get the intersection point from the previous intersection point to the next one
+        # during this process, calculating the evolution phase
+        GPUSingleDevice.get_intersection_point_with_evolution_phase[b_num, d_num](cuda_phase,
+                                                                                  cuda_remain_path,
+                                                                                  cuda_intersect,
+                                                                                  cuda_kin_grid,
+                                                                                  cuda_klen_grid,
+                                                                                  cuda_intersect,
+                                                                                  my_device.surface_point,
+                                                                                  my_device.normal,
+                                                                                  k_num)
+        # Add the propagation phase
+        GPUSingleDevice.add_spatial_phase(cuda_phase,
+                                          (ref_trajectory[device_idx + 1] -
+                                           ref_trajectory[device_idx]),
+                                          cuda_kin_grid,
+                                          k_num)
+
         if my_device.type == "Crystal: Bragg Reflection":
-            # Get the intersection point from the previous intersection point
-            GPUSingleDevice.get_intersection_point[b_num, d_num](cuda_remain_path,
-                                                                 cuda_intersect,
-                                                                 cuda_kin_grid,
-                                                                 cuda_klen_grid,
-                                                                 cuda_remain_path,
-                                                                 cuda_intersect,
-                                                                 my_device.surface_point,
-                                                                 my_device.normal,
-                                                                 k_num)
 
             # Get the reflectivity
-            GPUSingleDevice.get_thick_bragg_reflection_sigma_polarization[b_num, d_num](cuda_reflect_sigma,
-                                                                                        cuda_kin_grid,
-                                                                                        cuda_spectrum,
-                                                                                        cuda_jacobian,
-                                                                                        cuda_klen_grid,
-                                                                                        cuda_kin_grid,
-                                                                                        my_device.thickness,
-                                                                                        my_device.h,
-                                                                                        my_device.normal,
-                                                                                        my_device.dot_hn,
-                                                                                        my_device.h_square,
-                                                                                        my_device.chi0,
-                                                                                        my_device.chih_sigma,
-                                                                                        my_device.chihbar_sigma,
-                                                                                        k_num)
+            GPUSingleDevice.get_bragg_reflection_sigma_polarization[b_num, d_num](cuda_reflect_sigma,
+                                                                                  cuda_kin_grid,
+                                                                                  cuda_spectrum,
+                                                                                  cuda_jacobian,
+                                                                                  cuda_klen_grid,
+                                                                                  cuda_kin_grid,
+                                                                                  my_device.thickness,
+                                                                                  my_device.h,
+                                                                                  my_device.normal,
+                                                                                  my_device.dot_hn,
+                                                                                  my_device.h_square,
+                                                                                  my_device.chi0,
+                                                                                  my_device.chih_sigma,
+                                                                                  my_device.chihbar_sigma,
+                                                                                  k_num)
 
             GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_reflect_sigma,
                                                                          cuda_reflect_total_sigma,
                                                                          cuda_reflect_total_sigma,
                                                                          k_num)
+        elif my_device.type == "Prism":
 
-    # --------------------------------------------------------------------
-    #  Step 8. Get the propagation phase
-    # --------------------------------------------------------------------
-    GPUSingleDevice.get_final_point[b_num, d_num](cuda_final_points,
-                                                  cuda_intersect,
-                                                  cuda_kin_grid,
-                                                  cuda_klen_grid,
-                                                  cuda_remain_path,
-                                                  k_num)
+            # Diffracted by the prism
+            GPUSingleDevice.add_vector[b_num, d_num](cuda_kin_grid,
+                                                     cuda_kin_grid,
+                                                     my_device.wavevec_delta,
+                                                     k_num)
 
-    # Get the propagational phase from the inital phase.
-    GPUSingleDevice.get_relative_spatial_phase[b_num, d_num](cuda_phase,
-                                                             cuda_final_points,
-                                                             observation,
-                                                             cuda_kin_grid,
-                                                             pulse_k0_final,
-                                                             k_num)
+            # Update the wave number
+            GPUSingleDevice.get_vector_length[b_num, d_num](cuda_klen_grid,
+                                                            cuda_kin_grid,
+                                                            3,
+                                                            k_num)
+        elif my_device.type == "Transmissive Grating":
+            # Diffracted by the first grating
+            GPUSingleDevice.get_square_grating_diffraction_scalar[b_num, d_num](cuda_kin_grid,
+                                                                                cuda_spectrum,
+                                                                                cuda_klen_grid,
+                                                                                cuda_kin_grid,
+                                                                                my_device.h,
+                                                                                my_device.n,
+                                                                                my_device.ab_ratio,
+                                                                                my_device.thick_vec,
+                                                                                my_device.order,
+                                                                                my_device.base_wave_vector,
+                                                                                k_num)
+        else:
+            pass
 
-    # Add the phase
-    GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_phase,
-                                                                 cuda_spectrum,
-                                                                 cuda_spectrum,
-                                                                 k_num)
+        # --------------------------------------------------------------------
+        #  Step 8. Get the propagation phase
+        # --------------------------------------------------------------------
+        GPUSingleDevice.add_evolution_phase_elementwise[b_num, d_num](cuda_phase,
+                                                                      cuda_remain_path,
+                                                                      cuda_klen_grid,
+                                                                      k_num)
 
-    # Add the jacobian
-    GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_jacobian,
-                                                                 cuda_spectrum,
-                                                                 cuda_spectrum,
-                                                                 k_num)
+        # Add the propagation phase
+        GPUSingleDevice.add_spatial_phase(cuda_phase,
+                                          (ref_trajectory[-1] -
+                                           ref_trajectory[-2]),
+                                          cuda_kin_grid,
+                                          k_num)
+
+        # Add the phase
+        GPUSingleDevice.add_phase_to_scalar_spectrum[b_num, d_num](cuda_phase,
+                                                                   cuda_spectrum,
+                                                                   k_num)
+
+        # Add the jacobian
+        GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_jacobian,
+                                                                     cuda_spectrum,
+                                                                     cuda_spectrum,
+                                                                     k_num)
 
     ###################################################################################################
     #                                  Finish
@@ -199,6 +216,7 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     # Create result dictionary
 
     sanity_check = {"intersect_points": intersect_points,
+
                     "remaining_length": remaining_length,
                     "phase_grid": phase_grid,
                     "final_point": component_final_points,
@@ -209,10 +227,10 @@ def get_diffracted_monochromatic_components_sigma_polarization(k_grid,
     reflectivity_holder = {"reflectivity_sigma": reflect_sigma,
                            "reflectivity_sigma_tot": reflect_total_sigma,
                            }
-
-    field_holder = {"final_spectrum": spec_holder}
-
-    return field_holder, reflectivity_holder, sanity_check
+    
+    spectrum_holder = {"final_spectrum": spec_holder}
+    
+    return spectrum_holder, reflectivity_holder, sanity_check
 
 
 #########################################################################
@@ -558,10 +576,10 @@ def get_gaussian_source_diffraction(crystal_list,
                                               number_z)
 
             # Add the phase
-            GPUSingleDevice.add_phase_to_spectrum[b_num, d_num](cuda_phase_real,
-                                                                cuda_spec_vec,
-                                                                cuda_spec_vec,
-                                                                number_z)
+            GPUSingleDevice.add_phase_to_vector_spectrum[b_num, d_num](cuda_phase_real,
+                                                                       cuda_spec_vec,
+                                                                       cuda_spec_vec,
+                                                                       number_z)
 
             # """
             ###################################################################################################

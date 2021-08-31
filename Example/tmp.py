@@ -214,7 +214,7 @@ for undulator_num in [11, 13, 15, 17, 19]:
              reflectivity_holder[idx],
              sanity_check[idx]
              ) = GPUMultiDevice.get_diffracted_monochromatic_components_sigma_polarization(
-                k_grid=np.ascontiguousarray(k_grid_list[idx]),
+                kin_grid=np.ascontiguousarray(k_grid_list[idx]),
                 spectrum_in=np.ascontiguousarray(field_list[idx]),
                 device_list=device_list_all,
                 total_path=path_length,

@@ -148,7 +148,7 @@ def scalar_vector_elementwise_multiply_complex(scalar_grid, vec, vec_grid, num):
 
 
 @cuda.jit("void(float64[:], complex128[:,:], complex128[:,:], int64)")
-def add_phase_to_spectrum(phase_real, vec, vec_grid, num):
+def add_phase_to_vector_spectrum(phase_real, vec, vec_grid, num):
     """
 
     :param phase_real:
@@ -163,6 +163,21 @@ def add_phase_to_spectrum(phase_real, vec, vec_grid, num):
         vec_grid[idx, 0] = phase * vec[idx, 0]
         vec_grid[idx, 1] = phase * vec[idx, 1]
         vec_grid[idx, 2] = phase * vec[idx, 2]
+
+
+@cuda.jit("void(float64[:], complex128[:], int64)")
+def add_phase_to_scalar_spectrum(phase_real, scalar_grid, num):
+    """
+
+    :param phase_real:
+    :param scalar_grid:
+    :param num:
+    :return:
+    """
+    idx = cuda.grid(1)
+    if idx < num:
+        phase = complex(math.cos(phase_real[idx]), math.sin(phase_real[idx]))
+        scalar_grid[idx] = phase * scalar_grid[idx]
 
 
 @cuda.jit("void(complex128[:,:], complex128[:], complex128[:], complex128[:], int64)")
@@ -740,19 +755,19 @@ def get_bragg_reflection_with_jacobian(reflectivity_sigma, reflectivity_pi, kout
           'float64, float64,'
           'complex128, complex128, complex128,'
           'int64)')
-def get_thick_bragg_reflection_sigma_polarization(reflectivity_sigma,
-                                                  kout_grid,
-                                                  efield_grid,
-                                                  jacobian,
-                                                  klen_grid,
-                                                  kin_grid,
-                                                  d,
-                                                  h,
-                                                  n,
-                                                  dot_hn,
-                                                  h_square,
-                                                  chi0, chih_sigma,
-                                                  chihbar_sigma, num):
+def get_bragg_reflection_sigma_polarization(reflectivity_sigma,
+                                            kout_grid,
+                                            efield_grid,
+                                            jacobian,
+                                            klen_grid,
+                                            kin_grid,
+                                            d,
+                                            h,
+                                            n,
+                                            dot_hn,
+                                            h_square,
+                                            chi0, chih_sigma,
+                                            chihbar_sigma, num):
     """
     Given the crystal info, the input electric field, this function returns the
     reflectivity for the sigma polarization and pi polarization and the
@@ -1623,6 +1638,84 @@ def get_square_grating_effect_non_zero(kout_grid, efield_grid,
         efield_grid[row, 0] = factor * efield_grid[row, 0]
         efield_grid[row, 1] = factor * efield_grid[row, 1]
         efield_grid[row, 2] = factor * efield_grid[row, 2]
+
+        # Step 3: Update the momentum and the length of the momentum
+        kout_grid[row, 0] = kin_grid[row, 0] + order * grating_k[0]
+        kout_grid[row, 1] = kin_grid[row, 1] + order * grating_k[1]
+        kout_grid[row, 2] = kin_grid[row, 2] + order * grating_k[2]
+
+        klen_grid[row] = math.sqrt(kout_grid[row, 0] * kout_grid[row, 0] +
+                                   kout_grid[row, 1] * kout_grid[row, 1] +
+                                   kout_grid[row, 2] * kout_grid[row, 2])
+
+
+@cuda.jit('void'
+          '(float64[:,:], complex128[:],'
+          'float64[:],'
+          'float64[:,:],'
+          'float64[:], complex128, float64, float64[:], float64, float64[:],'
+          'int64)')
+def get_square_grating_diffraction_scalar(kout_grid,
+                                          efield_grid,
+                                          klen_grid,
+                                          kin_grid,
+                                          grating_h,
+                                          grating_n,
+                                          grating_ab_ratio,
+                                          grating_base,
+                                          order,
+                                          grating_k,
+                                          num):
+    """
+    This function add the grating effect to the pulse. Including the phase change and the momentum change.
+
+    Notice that this function can not handle the zeroth order
+
+    :param kout_grid: The output momentum grid
+    :param efield_grid: The output coefficient for each monochromatic component
+    :param klen_grid: The length of each incident wave vector. Notice that this value will update for the grating.
+    :param kin_grid: The incident wave vector grid.
+    :param grating_h: The height vector of the grating
+    :param grating_n: The refraction index of the grating.
+    :param grating_ab_ratio: The b / (a + b) where a is the width of the groove while b the width of the tooth
+    :param grating_base: The thickness of the base of the grating
+    :param order: The order of diffraction to investigate.
+                    Notice that this variable has to be an integer mathematically.
+                    However, in numerical calculation, this is used as a float.
+    :param grating_k: The base wave vector of the grating
+    :param num: The number of momenta to calculate.
+    :return: None
+    """
+
+    row = cuda.grid(1)
+    if row < num:
+        # Step 1: Calculate the effect of the grating on magnitude and phase for each component
+
+        # The argument for exp(ik(n-1)h)
+        nhk = complex(grating_h[0] * kin_grid[row, 0] +
+                      grating_h[1] * kin_grid[row, 1] +
+                      grating_h[2] * kin_grid[row, 2]) * (grating_n - complex(1.))
+
+        # The argument for exp(ik(n-1)t) for the phase different and absorption from
+        # the base of the grating
+        thick_k_n = complex(grating_base[0] * kin_grid[row, 0] +
+                            grating_base[1] * kin_grid[row, 1] +
+                            grating_base[2] * kin_grid[row, 2]) * (grating_n - complex(1.))
+
+        first_factor = complex(1.
+                               - math.cos(two_pi * order * grating_ab_ratio),
+                               - math.sin(two_pi * order * grating_ab_ratio))
+        second_factor = complex(1.) - complex(math.exp(-nhk.imag) * math.cos(nhk.real),
+                                              math.exp(-nhk.imag) * math.sin(nhk.real))
+
+        # Factor from the base
+        factor_base = complex(math.cos(thick_k_n.real) * math.exp(-thick_k_n.imag),
+                              math.sin(thick_k_n.real) * math.exp(-thick_k_n.imag))
+
+        factor = 1.j / complex(2. * math.pi * order) * first_factor * second_factor * factor_base
+
+        # Step 2: Update the coefficient
+        efield_grid[row] = factor * efield_grid[row]
 
         # Step 3: Update the momentum and the length of the momentum
         kout_grid[row, 0] = kin_grid[row, 0] + order * grating_k[0]
