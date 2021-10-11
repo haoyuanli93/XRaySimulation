@@ -110,7 +110,7 @@ def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
                                                                                   my_device.normal,
                                                                                   k_num)
         # Add the propagation phase
-        GPUSingleDevice.add_spatial_phase(cuda_phase,
+        GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase,
                                           (ref_trajectory[device_idx + 1] -
                                            ref_trajectory[device_idx]),
                                           cuda_kin_grid,
@@ -177,7 +177,7 @@ def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
                                                                       k_num)
 
         # Add the propagation phase
-        GPUSingleDevice.add_spatial_phase(cuda_phase,
+        GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase,
                                           (ref_trajectory[-1] -
                                            ref_trajectory[-2]),
                                           cuda_kin_grid,
@@ -464,7 +464,7 @@ def get_gaussian_source_diffraction(crystal_list,
                                                                                               number_z)
 
                     # Add the propagation phase
-                    GPUSingleDevice.add_spatial_phase(cuda_phase_real,
+                    GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
                                                       (reference_trajectory[crystal_idx + 1] -
                                                        reference_trajectory[crystal_idx]),
                                                       cuda_kin_grid,
@@ -498,7 +498,7 @@ def get_gaussian_source_diffraction(crystal_list,
                                                                                               number_z)
 
                     # Add the propagation phase
-                    GPUSingleDevice.add_spatial_phase(cuda_phase_real,
+                    GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
                                                       (reference_trajectory[crystal_idx + 1] -
                                                        reference_trajectory[crystal_idx]),
                                                       cuda_kin_grid,
@@ -528,7 +528,7 @@ def get_gaussian_source_diffraction(crystal_list,
                                                                                               number_z)
 
                     # Add the propagation phase
-                    GPUSingleDevice.add_spatial_phase(cuda_phase_real,
+                    GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
                                                       (reference_trajectory[crystal_idx + 1] -
                                                        reference_trajectory[crystal_idx]),
                                                       cuda_kin_grid,
@@ -569,7 +569,7 @@ def get_gaussian_source_diffraction(crystal_list,
                                                                           number_z)
 
             # Add the propagation phase
-            GPUSingleDevice.add_spatial_phase(cuda_phase_real,
+            GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
                                               (reference_trajectory[-1] -
                                                reference_trajectory[-2]),
                                               cuda_kin_grid,

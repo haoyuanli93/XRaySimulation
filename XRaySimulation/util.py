@@ -35,7 +35,7 @@ def l2_square_batch(x):
 #               Unit conversion
 # --------------------------------------------------------------
 def kev_to_petahertz_frequency(energy):
-    return energy / hbar * 2 * pi
+    return energy / (hbar * 2 * pi)
 
 
 def kev_to_petahertz_angular_frequency(energy):
@@ -161,10 +161,10 @@ def get_bragg_kout(kin, h, normal):
     gammah = np.dot(kin + h, normal) / klen
     alpha = (2 * np.dot(kin, h) + np.dot(h, h)) / np.square(klen)
 
-    if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
-        momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
-    else:
-        momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
+    # if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
+    #    momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
+    # else:
+    momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
 
     # Add momentum transfer
     kout += normal * momentum
@@ -237,7 +237,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
 
     gamma_0 = np.divide(dot_kn, klen_grid)
     gamma_h = np.divide(dot_kn + dot_hn, klen_grid)
-    #print(gamma_h)
+    # print(gamma_h)
 
     b = np.divide(gamma_0, gamma_h)
     b_cplx = b.astype(np.complex128)
@@ -284,7 +284,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
 
     # Take care of the exponential
     mask = np.zeros_like(im, dtype=np.bool)
-    mask[im <= 400] = True
+    mask[im <= 100] = True
 
     reflect_s = chih_sigma * b_cplx / denominator
     reflect_s[mask] = chih_sigma * b_cplx[mask] * numerator[mask] / denominator[mask]
