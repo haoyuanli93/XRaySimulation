@@ -1326,7 +1326,7 @@ def add_evolution_phase(phase, path_length, k_len, num):
     """
     idx = cuda.grid(1)
     if idx < num:
-        phase[idx] -= path_length * k_len[idx] * c
+        phase[idx] -= path_length * k_len[idx]  # * c
 
 
 @cuda.jit("void(float64[:], float64[:], float64[:], int64)")
@@ -1347,7 +1347,7 @@ def add_evolution_phase_elementwise(phase, path_length, k_len, num):
     """
     idx = cuda.grid(1)
     if idx < num:
-        phase[idx] -= path_length[idx] * k_len[idx] * c
+        phase[idx] -= path_length[idx] * k_len[idx]  # * c
 
 
 @cuda.jit("void(complex128[:], float64[:,:], float64[:], float64[:,:], float64[:], int64)")

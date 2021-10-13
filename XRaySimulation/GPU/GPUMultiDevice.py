@@ -111,10 +111,10 @@ def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
                                                                                   k_num)
         # Add the propagation phase
         GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase,
-                                          (ref_trajectory[device_idx + 1] -
-                                           ref_trajectory[device_idx]),
-                                          cuda_kin_grid,
-                                          k_num)
+                                                        (ref_trajectory[device_idx + 1] -
+                                                         ref_trajectory[device_idx]),
+                                                        cuda_kin_grid,
+                                                        k_num)
 
         if my_device.type == "Crystal: Bragg Reflection":
 
@@ -168,31 +168,31 @@ def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
         else:
             pass
 
-        # --------------------------------------------------------------------
-        #  Step 8. Get the propagation phase
-        # --------------------------------------------------------------------
-        GPUSingleDevice.add_evolution_phase_elementwise[b_num, d_num](cuda_phase,
-                                                                      cuda_remain_path,
-                                                                      cuda_klen_grid,
-                                                                      k_num)
+    # --------------------------------------------------------------------
+    #  Step 8. Get the propagation phase
+    # --------------------------------------------------------------------
+    GPUSingleDevice.add_evolution_phase_elementwise[b_num, d_num](cuda_phase,
+                                                                  cuda_remain_path,
+                                                                  cuda_klen_grid,
+                                                                  k_num)
 
-        # Add the propagation phase
-        GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase,
-                                          (ref_trajectory[-1] -
-                                           ref_trajectory[-2]),
-                                          cuda_kin_grid,
-                                          k_num)
+    # Add the propagation phase
+    GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase,
+                                                    (ref_trajectory[-1] -
+                                                     ref_trajectory[-2]),
+                                                    cuda_kin_grid,
+                                                    k_num)
 
-        # Add the phase
-        GPUSingleDevice.add_phase_to_scalar_spectrum[b_num, d_num](cuda_phase,
-                                                                   cuda_spectrum,
-                                                                   k_num)
+    # Add the phase
+    GPUSingleDevice.add_phase_to_scalar_spectrum[b_num, d_num](cuda_phase,
+                                                               cuda_spectrum,
+                                                               k_num)
 
-        # Add the jacobian
-        GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_jacobian,
-                                                                     cuda_spectrum,
-                                                                     cuda_spectrum,
-                                                                     k_num)
+    # Add the jacobian
+    GPUSingleDevice.scalar_scalar_multiply_complex[b_num, d_num](cuda_jacobian,
+                                                                 cuda_spectrum,
+                                                                 cuda_spectrum,
+                                                                 k_num)
 
     ###################################################################################################
     #                                  Finish
@@ -227,9 +227,9 @@ def get_diffracted_monochromatic_components_sigma_polarization(kin_grid,
     reflectivity_holder = {"reflectivity_sigma": reflect_sigma,
                            "reflectivity_sigma_tot": reflect_total_sigma,
                            }
-    
+
     spectrum_holder = {"final_spectrum": spec_holder}
-    
+
     return spectrum_holder, reflectivity_holder, sanity_check
 
 
@@ -465,10 +465,10 @@ def get_gaussian_source_diffraction(crystal_list,
 
                     # Add the propagation phase
                     GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
-                                                      (reference_trajectory[crystal_idx + 1] -
-                                                       reference_trajectory[crystal_idx]),
-                                                      cuda_kin_grid,
-                                                      number_z)
+                                                                    (reference_trajectory[crystal_idx + 1] -
+                                                                     reference_trajectory[crystal_idx]),
+                                                                    cuda_kin_grid,
+                                                                    number_z)
 
                     # Diffracted by the first grating
                     GPUSingleDevice.get_square_grating_effect_non_zero[b_num, d_num](cuda_kin_grid,
@@ -499,10 +499,10 @@ def get_gaussian_source_diffraction(crystal_list,
 
                     # Add the propagation phase
                     GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
-                                                      (reference_trajectory[crystal_idx + 1] -
-                                                       reference_trajectory[crystal_idx]),
-                                                      cuda_kin_grid,
-                                                      number_z)
+                                                                    (reference_trajectory[crystal_idx + 1] -
+                                                                     reference_trajectory[crystal_idx]),
+                                                                    cuda_kin_grid,
+                                                                    number_z)
 
                     # Diffracted by the prism
                     GPUSingleDevice.add_vector[b_num, d_num](cuda_kin_grid,
@@ -529,10 +529,10 @@ def get_gaussian_source_diffraction(crystal_list,
 
                     # Add the propagation phase
                     GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
-                                                      (reference_trajectory[crystal_idx + 1] -
-                                                       reference_trajectory[crystal_idx]),
-                                                      cuda_kin_grid,
-                                                      number_z)
+                                                                    (reference_trajectory[crystal_idx + 1] -
+                                                                     reference_trajectory[crystal_idx]),
+                                                                    cuda_kin_grid,
+                                                                    number_z)
 
                     # Get the reflectivity
                     GPUSingleDevice.get_bragg_reflection[b_num, d_num](cuda_reflect_sigma,
@@ -570,10 +570,10 @@ def get_gaussian_source_diffraction(crystal_list,
 
             # Add the propagation phase
             GPUSingleDevice.add_spatial_phase[b_num, d_num](cuda_phase_real,
-                                              (reference_trajectory[-1] -
-                                               reference_trajectory[-2]),
-                                              cuda_kin_grid,
-                                              number_z)
+                                                            (reference_trajectory[-1] -
+                                                             reference_trajectory[-2]),
+                                                            cuda_kin_grid,
+                                                            number_z)
 
             # Add the phase
             GPUSingleDevice.add_phase_to_vector_spectrum[b_num, d_num](cuda_phase_real,
