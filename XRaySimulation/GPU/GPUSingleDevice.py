@@ -871,13 +871,14 @@ def get_bragg_reflection_sigma_polarization(reflectivity_sigma,
         efield_grid[idx] *= reflectivity_sigma[idx]
 
 
-@cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
+@cuda.jit('void(complex128[:], float64[:], float64[:,:], complex128[:], complex128[:],'
           'float64[:], float64[:,:],'
           'float64, float64[:], float64[:], float64,'
           'float64, float64,'
           'complex128, complex128, complex128,'
           'int64)')
 def get_bragg_reflection_sigma_full(reflectivity_sigma,
+                                    phase_grid,
                                     kout_grid,
                                     efield_grid,
                                     jacobian,
@@ -992,20 +993,21 @@ def get_bragg_reflection_sigma_full(reflectivity_sigma,
             reflectivity_sigma[idx] = b_complex * chih_sigma / denominator
 
         # Get the phase term:
-        tmp = m_trans * dot_sn
+        phase_grid[idx] -= m_trans * dot_sn
 
         # Get the field
-        efield_grid[idx] *= reflectivity_sigma[idx] * complex(math.cos(tmp), -math.sin(tmp))
+        efield_grid[idx] *= reflectivity_sigma[idx]
 
 
 # TODO: Add this function to only account for the phase
-@cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
+@cuda.jit('void(complex128[:], float64[:], float64[:,:], complex128[:], complex128[:],'
           'float64[:], float64[:,:],'
           'float64, float64[:], float64[:],'
           'float64, float64, float64,'
           'complex128, complex128, complex128,'
           'int64)')
 def get_bragg_reflection_sigma_phase(reflectivity_sigma,
+                                     phase_grid,
                                      kout_grid,
                                      efield_grid,
                                      jacobian,
@@ -1017,14 +1019,17 @@ def get_bragg_reflection_sigma_phase(reflectivity_sigma,
                                      dot_sn,
                                      dot_hn,
                                      h_square,
-                                     chi0, chih_sigma,
-                                     chihbar_sigma, num):
+                                     chi0,
+                                     chih_sigma,
+                                     chihbar_sigma,
+                                     num):
     """
     Given the crystal info, the input electric field, this function returns the
     reflectivity for the sigma polarization and pi polarization and the
     diffracted electric field.
 
     :param reflectivity_sigma:
+    :param phase_grid:
     :param kout_grid:
     :param efield_grid:
     :param jacobian:
@@ -1086,13 +1091,13 @@ def get_bragg_reflection_sigma_phase(reflectivity_sigma,
         #######################################################################
         # Get the phase term:
         tmp = m_trans * dot_sn
+        phase_grid[idx] -= tmp
+
+        # Get the reflectivity
         reflectivity_sigma[idx] = complex(math.cos(tmp), -math.sin(tmp))
 
         # Get the jacobian :   dot(kout, n) / dot(kin, n)
         jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
-
-        # Get the field
-        efield_grid[idx] *= reflectivity_sigma[idx]
 
 
 @cuda.jit('void(complex128[:], float64[:,:], complex128[:], complex128[:],'
