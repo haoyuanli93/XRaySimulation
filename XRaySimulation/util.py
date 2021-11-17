@@ -161,10 +161,10 @@ def get_bragg_kout(kin, h, normal):
     gammah = np.dot(kin + h, normal) / klen
     alpha = (2 * np.dot(kin, h) + np.dot(h, h)) / np.square(klen)
 
-    # if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
-    #    momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
-    # else:
-    momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
+    if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
+        momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
+    else:
+         momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
 
     # Add momentum transfer
     kout += normal * momentum

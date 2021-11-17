@@ -15,6 +15,8 @@ however.
 # Essential To-Do list
 1. Add unit test module
 2. Release a stable version.
+3. Add functions to calculate quantities with prism 
+
 
 # Potential To-Do List
 The following feature has not been implemented
