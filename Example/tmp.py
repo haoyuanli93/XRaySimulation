@@ -235,3 +235,18 @@ for undulator_num in [11, 13, 15, 17, 19]:
                 np.reshape(spectrum_assemble, newshape))
 
         del spectrum_assemble
+
+
+
+
+
+
+
+"#!/bin/bash \n"
+"#SBATCH --partition=psanaq \n"
+"#SBATCH --job-name=genesis-test \n"
+"#SBATCH --output=output-%j.txt \n"
+"#SBATCH --error=error-%j.txt \n"
+"#SBATCH --ntasks=32 \n"
+" \n"
+"mpirun -np 32  genesis2-mpi 1p25fs_s1_11_04.in \n"
