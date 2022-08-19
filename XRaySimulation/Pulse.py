@@ -105,7 +105,7 @@ class GaussianPulse3D:
         self.x0 = np.dot(rot_mat, self.x0)
         self.k0 = np.dot(rot_mat, self.k0)
         self.polar = np.dot(rot_mat, self.polar)
-    
+
         self.sigma_mat = np.dot(np.dot(rot_mat, self.sigma_mat), rot_mat.T)
 
     def rotate_wrt_point(self, rot_mat, ref_point):
@@ -170,3 +170,72 @@ def get_square_pulse_spectrum_smooth(k_grid, k0, a_val, b_val, c_val, scaling, s
     gaussian = np.exp(tmp)
 
     return np.multiply(spectrum, gaussian)
+
+
+def getGaussianModeSum(nx, ny, nz, dx, dy, dz, nGaussian=50,
+                       modeSizeX=10, modeSizeY=10, modeSizeZ=0.9,
+                       modeCenterSpreadX=0.1, modeCenterSpreadY=0.1, modeCenterSpreadZ=1.5,
+                       k0=100,
+                       randomSeed=41):
+    """
+
+    :param nx:
+    :param ny:
+    :param nz:
+    :param dx:
+    :param dy:
+    :param dz:
+    :param nGaussian:
+    :param modeSizeX:
+    :param modeSizeY:
+    :param modeSizeZ:
+    :param modeCenterSpreadX:
+    :param modeCenterSpreadY:
+    :param modeCenterSpreadZ:
+    :param k0:
+    :param randomSeed:
+    :return:
+    """
+
+    # Generate a series of electric field mode
+    np.random.seed(randomSeed)
+    modeCenter = np.random.rand(nGaussian, 3) - 0.5
+    modeCenter[:, 0] *= modeCenterSpreadX
+    modeCenter[:, 1] *= modeCenterSpreadY
+    modeCenter[:, 2] *= modeCenterSpreadZ
+
+    modeMagnitude = np.random.rand(nGaussian) + 0.1
+    modePhaseCenter = np.random.rand(nGaussian) * np.pi * 2
+
+    # Electric Field
+    eField = np.zeros((nx, ny, nz), dtype=np.complex128)
+
+    for modeIdx in range(nGaussian):
+        # Create the mode
+        modeField = np.ones((nx, ny, nz), dtype=np.float64)
+
+        modeField *= np.exp(
+            - np.square(np.arange(- nx // 2 + 1, nx - nx // 2 ) * dx - modeCenter[modeIdx, 0])
+            / 2. / modeSizeX ** 2)[:, np.newaxis, np.newaxis]
+
+        modeField *= np.exp(
+            - np.square(np.arange(- ny // 2 + 1, ny - ny // 2 ) * dy - modeCenter[modeIdx, 1])
+            / 2. / modeSizeY ** 2)[np.newaxis, :, np.newaxis]
+
+        modeField *= np.exp(
+            - np.square(np.arange(- nz // 2 + 1, nz - nz // 2) * dz - modeCenter[modeIdx, 2])
+            / 2. / modeSizeZ ** 2)[np.newaxis, np.newaxis, :]
+
+        modeField *= modeMagnitude[modeIdx] / modeSizeX / modeSizeY / modeSizeZ / np.power(np.pi * 2, 1.5)
+
+        # Create the phase
+        modePhase = np.arange(nz) * dz * k0 + modePhaseCenter[modeIdx]
+
+        # Add the mode to the electric field
+        eField.real += modeField * np.cos(modePhase)[np.newaxis, np.newaxis, :]
+        eField.imag += modeField * np.sin(modePhase)[np.newaxis, np.newaxis, :]
+
+    # Remove the overall carry frequency
+    eField *= np.exp(1.j * np.arange(nz) * dz * k0)[np.newaxis, np.newaxis, :]
+
+    return eField
