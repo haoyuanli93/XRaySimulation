@@ -141,15 +141,14 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
                     b = float(words[-1])
 
                     info_holder.update({"chi_p": complex(a, -b)})
+                elif words[1] == "Bragg":
+                    if words[2] == "angle":
+                        info_holder.update({"Bragg angle (deg)": float(words[-1])})
                 else:
                     pass
 
-            elif words[0] == "Bragg":
-                if words[1] == "angle":
-                    info_holder.update({"Bragg angle (deg)": float(words[-1])})
-
             elif words[0] == 'Interplanar':
-                info_holder.update({"Interplanar distance (A)": float(words[-1])})
+                info_holder.update({"d": float(words[-1]) * 1e-4})
 
             else:
                 pass
