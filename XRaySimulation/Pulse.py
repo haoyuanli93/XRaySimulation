@@ -236,6 +236,6 @@ def getGaussianModeSum(nx, ny, nz, dx, dy, dz, nGaussian=50,
         eField.imag += modeField * np.sin(modePhase)[np.newaxis, np.newaxis, :]
 
     # Remove the overall carry frequency
-    eField *= np.exp(1.j * np.arange(nz) * dz * k0)[np.newaxis, np.newaxis, :]
+    eField *= np.exp(-1.j * np.arange(nz) * dz * k0)[np.newaxis, np.newaxis, :]
 
     return eField

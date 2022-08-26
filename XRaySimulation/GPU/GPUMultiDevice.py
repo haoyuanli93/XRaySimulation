@@ -335,14 +335,14 @@ def get_diffraction_spectrum_sigma_full(kin_grid,
     ###################################################################################################
     #                                  Finish
     ###################################################################################################
-    cuda_spectrum.to_host()
-    cuda_reflect_sigma.to_host()
-    cuda_reflect_total_sigma.to_host()
+    spec_holder = cuda_spectrum.copy_to_host()
+    reflect_sigma = cuda_reflect_sigma.copy_to_host()
+    reflect_total_sigma = cuda_reflect_total_sigma.copy_to_host()
 
-    cuda_phase.to_host()
-    cuda_kin_grid.to_host()
-    cuda_klen_grid.to_host()
-    cuda_jacobian.to_host()
+    phase_grid = cuda_phase.copy_to_host()
+    kin_grid = cuda_kin_grid.copy_to_host()
+    klen_grid = cuda_klen_grid.copy_to_host()
+    jacobian_grid = cuda_jacobian.copy_to_host()
 
     # Create result dictionary
     sanity_check = {"phase_grid": phase_grid,

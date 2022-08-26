@@ -53,7 +53,7 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
     while line_idx < total_line_num:
         line = lines[line_idx]
         words = line.split()
-
+        # print(words)
         if words:
             if words[0] == "Density":
                 info_holder.update({"Density (g/cm^3)": float(words[-1])})
@@ -94,59 +94,61 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
             elif words[0] == "Poisson":
                 info_holder.update({"Poisson ratio": float(words[-1])})
 
-            elif words[0] == '<i>n':
+            elif words[0] == '<pre>':
+                if words[1] == '<i>n':
 
-                # Get the real part of chi0
-                a = float(words[-1][4:])
+                    # Get the real part of chi0
+                    a = float(words[-1][4:])
 
-                # Get the imagniary part of chi0
-                line_idx += 1
-                line = lines[line_idx]
-                words = line.split()
-                b = float(words[-1])
+                    # Get the imagniary part of chi0
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
 
-                # Add an entry
-                info_holder.update({"chi0": complex(a, b)})
+                    # Add an entry
+                    info_holder.update({"chi0": complex(a, b)})
 
-                # Skip the following two lines
-                line_idx += 2
+                    # Skip the following two lines
+                    line_idx += 2
 
-            elif words[0] == "Bragg":
-                if words[1] == "angle":
-                    info_holder.update({"Bragg angle (deg)": float(words[-1])})
+                elif words[-1] == 'pol=Sigma':
+                    # Get the real part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    a = float(words[-1])
+
+                    # Get the imaginary part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
+
+                    info_holder.update({"chi_s": complex(a, -b)})
+
+                elif words[-1] == 'pol=Pi':
+                    # Get the real part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    a = float(words[-1])
+
+                    # Get the imaginary part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
+
+                    info_holder.update({"chi_p": complex(a, -b)})
+                elif words[1] == "Bragg":
+                    if words[2] == "angle":
+                        info_holder.update({"Bragg angle (deg)": float(words[-1])})
+                else:
+                    pass
 
             elif words[0] == 'Interplanar':
-                info_holder.update({"Interplanar distance (A)": float(words[-1])})
-
-            elif words[-1] == 'pol=Sigma':
-                # Get the real part
-                line_idx += 1
-                line = lines[line_idx]
-                words = line.split()
-                a = float(words[-1])
-
-                # Get the imaginary part
-                line_idx += 1
-                line = lines[line_idx]
-                words = line.split()
-                b = float(words[-1])
-
-                info_holder.update({"chi_s": complex(a, -b)})
-
-            elif words[-1] == 'pol=Pi':
-                # Get the real part
-                line_idx += 1
-                line = lines[line_idx]
-                words = line.split()
-                a = float(words[-1])
-
-                # Get the imaginary part
-                line_idx += 1
-                line = lines[line_idx]
-                words = line.split()
-                b = float(words[-1])
-
-                info_holder.update({"chi_p": complex(a, -b)})
+                info_holder.update({"d": float(words[-1]) * 1e-4})
 
             else:
                 pass
