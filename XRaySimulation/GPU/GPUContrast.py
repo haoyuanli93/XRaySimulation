@@ -11,7 +11,9 @@ from numba import cuda
 #     Get the time-averaged mutual coherence function first and then get the contrast
 #########################################################################################
 
-def getContrastMethod1(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ, out="contrast"):
+def getContrastMethod1(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ,
+                       out="contrast",
+                       spatialBatchSize=1024, ):
     """
     This is much harder than I have previously expected.
     The array is so large that I have to divide them into several batches.
@@ -29,9 +31,29 @@ def getContrastMethod1(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
 
     :return:
     """
-    # Step1, prepare the
-    pass
+    # Step1, prepare the variables
 
+    # Get many batches of np.array to store the mutual coherence function
+    numXY = nx * ny
+    batchNum = (numXY - 1) // int(spatialBatchSize) + 1
+    batchSizeS = [int(spatialBatchSize), ] * (batchNum - 1) + [numXY - (batchNum - 1) * int(spatialBatchSize), ]
+
+    # Create the arrays and save to the disk
+    for batchIdx in range(batchNum):
+        coherenceFunctionReal = np.zeros((batchSizeS[batchIdx], numXY), dtype=np.float64)
+        coherenceFunctionImag = np.zeros((batchSizeS[batchIdx], numXY), dtype=np.float64)
+
+        np.save("./coherenceFunctionReal_{}.npy", coherenceFunctionReal)
+        np.save("./coherenceFunctionImag_{}.npy", coherenceFunctionImag)
+
+    # TODO: Get the other parameters
+
+    # Step2, Loop through the electric field
+    for eFieldIdx in range(len(eFieldComplexFiles)):
+        # Load the electric field
+        fileName = eFieldComplexFiles[eFieldIdx]
+
+        # 
 
 @cuda.jit('()')
 def getCoherenceFunctionXY_GPU_Method1(nSpatial,
@@ -82,6 +104,7 @@ def getCoherenceFunctionXY_GPU_Method1(nSpatial,
             # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
             holderReal[idx1, idx2] += holderRealTmp * weight[sIdx]
             holderImag[idx1, idx2] += holderImagTmp * weight[sIdx]
+
 
 #########################################################################################
 #                         Method 2
