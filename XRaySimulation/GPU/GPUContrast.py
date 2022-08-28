@@ -319,7 +319,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 deltaZx[idx1] + deltaZy[idx1])  # get the contribution from the xy direction in Q*(r2-r1)/k0
 
         for sIdx in range(nSample):
-            deltaZ = int(deltaZxy + deltaZz(sIdx))  # Get the contribution from the z dimension
+            deltaZ = int(deltaZxy + deltaZz[sIdx])  # Get the contribution from the z dimension
 
             if abs(deltaZ) >= nz:
                 continue
