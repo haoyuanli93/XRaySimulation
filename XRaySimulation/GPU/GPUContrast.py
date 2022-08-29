@@ -68,8 +68,10 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         blockspergrid_y = math.ceil(numXY / threadsperblock[1])
         blockspergrid = (blockspergrid_x, blockspergrid_y)
 
+        contrastLocal = np.zeros(1, dtype=np.float64)
+        cuContrast = cuda.to_device(contrastLocal)
         # Update the coherence function
-        contrastArray[eFieldIdx] = getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
+        getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
             numXY,
             nz,
             nSampleZ,
@@ -79,14 +81,17 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
             cuWeight,
             eFieldRealFlat,
             eFieldImagFlat,
-        ).copy_to_host()[0]
+            cuContrast
+        )
+
+        contrastArray[eFieldIdx] = cuContrast.copy_to_host()[0]
 
     return contrastArray
 
 
 @cuda.jit('void(int64, int64, int64,' +
           ' float64[:], float64[:], float64[:], float64[:], ' +
-          'float64[:,:], float64[:,:])')
+          'float64[:,:], float64[:,:], float64[1])')
 def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        nz,
                                        nSample,
@@ -95,7 +100,8 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        deltaZz,
                                        weight,
                                        eFieldReal,
-                                       eFieldImag, ):
+                                       eFieldImag,
+                                       contrastHolder):
     """
     We divide the reshaped time-averaged coherence function along the first dimension.
 
@@ -108,10 +114,10 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
     :param weight:
     :param eFieldReal:
     :param eFieldImag:
+    :param contrastHolder:
     :return:
     """
     idx1, idx2 = cuda.grid(2)
-    contrast = cuda.device_array(1, np.float64)
 
     if (idx1 < nSpatial) & (idx2 < nSpatial):
         oldDeltaZ = 0
@@ -131,7 +137,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
                 # Add to the contrast
                 tmp = oldValue * weight[sIdx]
-                cuda.atomic.add(contrast, 0, tmp)
+                cuda.atomic.add(contrastHolder, 0, tmp)
                 continue
 
             # The delta Z determines the range over which time we calculate the average
@@ -151,13 +157,11 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 holderImagTmp += eFieldImag[idx1, tIdx] * eFieldReal[idx2, tIdx + deltaZ]
 
             newValue = holderRealTmp ** 2 + holderImagTmp ** 2
-            cuda.atomic.add(contrast, 0, newValue * weight[sIdx])
+            cuda.atomic.add(contrastHolder, 0, newValue * weight[sIdx])
 
             # Update the infor for the same deltaZ
             oldDeltaZ = int(deltaZ)
             oldValue = float(newValue)
-
-    return contrast
 
 
 #########################################################################################
