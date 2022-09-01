@@ -62,7 +62,7 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         del eFieldComplex
 
         # Define gpu calculation batch
-        threadsperblock = (16, 16)
+        threadsperblock = (int(16), int(16))
         blockspergrid_x = int(math.ceil(numXY / threadsperblock[0]))
         blockspergrid_y = int(math.ceil(numXY / threadsperblock[1]))
         blockspergrid = (blockspergrid_x, blockspergrid_y)
@@ -228,7 +228,7 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
         del eFieldComplex2
 
         # Define gpu calculation batch
-        threadsperblock = (16, 16)
+        threadsperblock = (int(16), int(16))
         blockspergrid_x = int(math.ceil(numXY / threadsperblock[0]))
         blockspergrid_y = int(math.ceil(numXY / threadsperblock[1]))
         blockspergrid = (blockspergrid_x, blockspergrid_y)
