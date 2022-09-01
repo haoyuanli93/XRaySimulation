@@ -9,7 +9,7 @@ from numba import cuda
 #
 #            Get the contrast of each pulse individually.
 #########################################################################################
-def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ, ):
+def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, ):
     """
     Very challenging calculation.
     Need to check with Yanwen about the definition of the calculation.
@@ -24,7 +24,6 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     :param dy:
     :param dz:
     :param nSampleZ:
-    :param dSampleZ:
     :return:
     """
     # Step1, prepare the variables
@@ -42,7 +41,7 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     deltaZz = np.ascontiguousarray(np.arange(nz) * dz * qVec[2] / k0 / dz)
 
     # Get the weight of the summation over z2-z1
-    weight = np.ascontiguousarray((dSampleZ - np.abs(np.arange(-(dSampleZ - 1), dSampleZ, 1))).astype(np.float64))
+    weight = np.ascontiguousarray((nSampleZ - np.abs(np.arange(-(nSampleZ - 1), nSampleZ, 1))).astype(np.float64))
 
     # Move the gpu to reduce traffic
     cuDeltaZx = cuda.to_device(deltaZx)
