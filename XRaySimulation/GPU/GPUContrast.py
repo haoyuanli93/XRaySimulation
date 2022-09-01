@@ -63,8 +63,8 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
 
         # Define gpu calculation batch
         threadsperblock = (16, 16)
-        blockspergrid_x = math.ceil(numXY / threadsperblock[0])
-        blockspergrid_y = math.ceil(numXY / threadsperblock[1])
+        blockspergrid_x = int(math.ceil(numXY / threadsperblock[0]))
+        blockspergrid_y = int(math.ceil(numXY / threadsperblock[1]))
         blockspergrid = (blockspergrid_x, blockspergrid_y)
 
         contrastLocal = np.zeros(1, dtype=np.float64)
