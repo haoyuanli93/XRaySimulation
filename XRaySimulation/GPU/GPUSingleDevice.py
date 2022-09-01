@@ -44,7 +44,6 @@ def init_kvec(kvec_grid, klen_grid, kz_grid, kz_square_grid, kx, ky, square_kxy,
         kvec_grid[idx, 0] = kx
         kvec_grid[idx, 1] = ky
         kvec_grid[idx, 2] = kz_grid[idx]
-
         klen_grid[idx] = math.sqrt(kz_square_grid[idx] + square_kxy)
 
 

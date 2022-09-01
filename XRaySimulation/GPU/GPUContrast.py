@@ -42,7 +42,7 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     deltaZz = np.ascontiguousarray(np.arange(nz) * dz * qVec[2] / k0 / dz)
 
     # Get the weight of the summation over z2-z1
-    weight = np.ascontiguousarray(dSampleZ - np.abs(np.arange(-(dSampleZ - 1), dSampleZ, 1)))
+    weight = np.ascontiguousarray((dSampleZ - np.abs(np.arange(-(dSampleZ - 1), dSampleZ, 1))).astype(np.float64))
 
     # Move the gpu to reduce traffic
     cuDeltaZx = cuda.to_device(deltaZx)
@@ -57,7 +57,6 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         # Load the electric field
         fileName = eFieldComplexFiles[eFieldIdx]
         eFieldComplex = np.load(fileName)
-
 
         eFieldRealFlat = np.ascontiguousarray(np.reshape(eFieldComplex.real, (nx * ny, nz)))
         eFieldImagFlat = np.ascontiguousarray(np.reshape(eFieldComplex.imag, (nx * ny, nz)))
@@ -90,9 +89,7 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     return contrastArray
 
 
-@cuda.jit('void(int64, int64, int64,' +
-          ' float64[:], float64[:], float64[:], float64[:], ' +
-          'float64[:,:], float64[:,:], float64[1])')
+@cuda.jit('void(int64, int64, int64, float64[:], float64[:], float64[:], float64[:], float64[:,:], float64[:,:], float64[:])')
 def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        nz,
                                        nSample,
@@ -237,8 +234,11 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
         blockspergrid_y = math.ceil(numXY / threadsperblock[1])
         blockspergrid = (blockspergrid_x, blockspergrid_y)
 
+        contrastLocal = np.zeros(1, dtype=np.float64)
+        cuContrast = cuda.to_device(contrastLocal)
+
         # Update the coherence function
-        contrastArray[eFieldIdx] = getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
+        getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
             numXY,
             nz,
             nSampleZ,
@@ -250,14 +250,18 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
             eFieldImagFlat1,
             eFieldRealFlat2,
             eFieldImagFlat2,
-        ).copy_to_host()[:]
+            cuContrast
+        )
+
+        contrastLocal = cuContrast.copy_to_host()
+        contrastArray[eFieldIdx, :] = contrastLocal[:]
 
     return contrastArray
 
 
 @cuda.jit('void(int64, int64, int64,' +
           ' float64[:], float64[:], float64[:], float64[:], ' +
-          'float64[:,:], float64[:,:], float64[:,:], float64[:,:])')
+          'float64[:,:], float64[:,:], float64[:,:], float64[:,:], float64[:])')
 def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        nz,
                                        nSample,
@@ -269,6 +273,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        eFieldImag1,
                                        eFieldReal2,
                                        eFieldImag2,
+                                       contrast
                                        ):
     """
     We divide the reshaped time-averaged coherence function along the first dimension.
@@ -284,10 +289,10 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
     :param eFieldImag1:
     :param eFieldReal2:
     :param eFieldImag2:
+    :param contrast:
     :return:
     """
     idx1, idx2 = cuda.grid(2)
-    contrast = cuda.device_array(2, np.float64)
 
     if (idx1 < nSpatial) & (idx2 < nSpatial):
         oldDeltaZ = 0
@@ -348,8 +353,6 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
             oldDeltaZ = int(deltaZ)
             oldValueReal = float(newValueReal)
             oldValueImag = float(newValueImag)
-
-    return contrast
 
 
 #########################################################################################
