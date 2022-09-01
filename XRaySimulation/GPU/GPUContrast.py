@@ -32,11 +32,11 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     # The phase change according to Q/k0 * r
     deltaZx = np.zeros((nx, ny))
     deltaZx[:, :] = (np.arange(nx) * dx * qVec[0] / k0 / dz)[:, np.newaxis]
-    deltaZx = np.ascontiguousarray(np.reshape(deltaZx, nx * ny))
+    deltaZx = np.ascontiguousarray(np.reshape(deltaZx, numXY))
 
     deltaZy = np.zeros((nx, ny))
     deltaZy[:, :] = (np.arange(ny) * dy * qVec[1] / k0 / dz)[np.newaxis, :]
-    deltaZy = np.ascontiguousarray(np.reshape(deltaZy, nx * ny))
+    deltaZy = np.ascontiguousarray(np.reshape(deltaZy, numXY))
 
     deltaZz = np.ascontiguousarray(np.arange(nz) * dz * qVec[2] / k0 / dz)
 
@@ -57,8 +57,8 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         fileName = eFieldComplexFiles[eFieldIdx]
         eFieldComplex = np.load(fileName)
 
-        eFieldRealFlat = np.ascontiguousarray(np.reshape(eFieldComplex.real, (nx * ny, nz)))
-        eFieldImagFlat = np.ascontiguousarray(np.reshape(eFieldComplex.imag, (nx * ny, nz)))
+        eFieldRealFlat = np.ascontiguousarray(np.reshape(eFieldComplex.real, (numXY, nz)))
+        eFieldImagFlat = np.ascontiguousarray(np.reshape(eFieldComplex.imag, (numXY, nz)))
         del eFieldComplex
 
         # Define gpu calculation batch
@@ -261,7 +261,7 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
 @cuda.jit('void(int64, int64, int64,' +
           ' float64[:], float64[:], float64[:], float64[:], ' +
           'float64[:,:], float64[:,:], float64[:,:], float64[:,:], float64[:])')
-def getCoherenceFunctionXY_GPU_Method2(nSpatial,
+def getCoherenceFunctionXY_GPU_Method3(nSpatial,
                                        nz,
                                        nSample,
                                        deltaZx,
