@@ -38,7 +38,7 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     deltaZy[:, :] = (np.arange(ny) * dy * qVec[1] / k0 / dz)[np.newaxis, :]
     deltaZy = np.ascontiguousarray(np.reshape(deltaZy, numXY))
 
-    deltaZz = np.ascontiguousarray(np.arange(nz) * dz * qVec[2] / k0 / dz)
+    deltaZz = np.ascontiguousarray(np.arange(-(nSampleZ - 1), nSampleZ, 1) * dz * qVec[2] / k0 / dz)
 
     # Get the weight of the summation over z2-z1
     weight = np.ascontiguousarray((nSampleZ - np.abs(np.arange(-(nSampleZ - 1), nSampleZ, 1))).astype(np.float64))
