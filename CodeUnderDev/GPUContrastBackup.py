@@ -5,6 +5,204 @@ from numba import cuda
 
 
 #########################################################################################
+#                         Method 1 (This is wrong. Do not use this function)
+#
+#     Get the time-averaged mutual coherence function first and then get the contrast
+#########################################################################################
+
+def getContrastMethod1(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ,
+                       out="contrast",
+                       spatialBatchSize=1024,
+                       workDir="./"):
+    """
+    This is much harder than I have previously expected.
+    The array is so large that I have to divide them into several batches.
+
+    The calculation strategy of this method is the following:
+
+    1. Create a cuda array to store the following information
+                    1/N_p \sum_(n, tIdx)  U'(x1,y1, z3 + Q*r1/ck) U(x2,y2,z3 + Q*r2/ck)
+    2. Move the array back to memory (because the I/O of the x-ray pulse is more expensive)
+    3. Loop through all the pulses
+    4. Calculate the integral of the cude array over each sub-array and assemble them in the end
+
+    Notice that, the cuda array is a 3D array rather than a 4D array because cude only accept 3D grid.
+    i.e., I have flatten the x,y spatial dimensions.
+
+    :return:
+    """
+    # Step1, prepare the variables
+
+    # Get many batches of np.array to store the mutual coherence function
+    numXY = nx * ny
+    batchNum = (numXY - 1) // int(spatialBatchSize) + 1
+    batchSizeS = [int(spatialBatchSize), ] * (batchNum - 1) + [numXY - (batchNum - 1) * int(spatialBatchSize), ]
+    batchEnds = np.sum([0, ] + batchSizeS)
+
+    # Create the arrays and save to the disk
+    for batchIdx in range(batchNum):
+        cohFunR = np.zeros((batchSizeS[batchIdx], numXY), dtype=np.float64)
+        cohFunI = np.zeros((batchSizeS[batchIdx], numXY), dtype=np.float64)
+
+        np.save(workDir + "cohFunR_{}.npy".format(batchIdx), cohFunR)
+        np.save(workDir + "cohFunI_{}.npy".format(batchIdx), cohFunI)
+
+    # The phase change according to Q/k0 * r
+    deltaZx = np.zeros((nx, ny))
+    deltaZx[:, :] = (np.arange(nx) * dx * qVec[0] / k0 / dz)[:, np.newaxis]
+    deltaZx = np.reshape(deltaZx, nx * ny)
+
+    deltaZy = np.zeros((nx, ny))
+    deltaZy[:, :] = (np.arange(ny) * dy * qVec[1] / k0 / dz)[np.newaxis, :]
+    deltaZy = np.reshape(deltaZy, nx * ny)
+
+    deltaZz = np.arange(nz) * dz * qVec[2] / k0 / dz
+
+    # Get the weight of the summation over z2-z1
+    weight = dSampleZ - np.abs(np.arange(-(dSampleZ - 1), dSampleZ, 1))
+
+    # Step2, Loop through the electric field
+    for eFieldIdx in range(len(eFieldComplexFiles)):
+        # Load the electric field
+        fileName = eFieldComplexFiles[eFieldIdx]
+        eFieldComplex = np.load(fileName)
+
+        eFieldRealFlat = np.reshape(eFieldComplex.real, (nx * ny, nz))
+        eFieldImagFlat = np.reshape(eFieldComplex.imag, (nx * ny, nz))
+        del eFieldComplex
+
+        # Loop through the calcluation of the mutual coherence function
+        for batchIdx in range(batchNum):
+            # Load the coherence function
+            cohFunR = np.load(workDir + "cohFunR_{}.npy".format(batchIdx))
+            cohFunI = np.load(workDir + "cohFunI_{}.npy".format(batchIdx))
+
+            cudaCohFunR = cuda.to_device(cohFunR)
+            cudaCohFunI = cuda.to_device(cohFunI)
+
+            # Define gpu calculation batch
+            threadsperblock = (16, 32)
+            blockspergrid_x = math.ceil(batchSizeS[batchIdx] / threadsperblock[0])
+            blockspergrid_y = math.ceil(numXY / threadsperblock[1])
+            blockspergrid = (blockspergrid_x, blockspergrid_y)
+
+            # Update the coherence function
+            getCoherenceFunctionXY_GPU_Method1[[blockspergrid, threadsperblock]](
+                batchSizeS[batchIdx],
+                numXY,
+                nz,
+                nSampleZ,
+                np.ascontiguousarray(deltaZx[batchEnds[batchIdx]:batchEnds[batchIdx + 1]]),
+                np.ascontiguousarray(deltaZy[batchEnds[batchIdx]:batchEnds[batchIdx + 1]]),
+                np.ascontiguousarray(deltaZz[batchEnds[batchIdx]:batchEnds[batchIdx + 1]]),
+                weight,
+                np.ascontiguousarray(eFieldRealFlat[batchEnds[batchIdx]:batchEnds[batchIdx + 1], :]),
+                np.ascontiguousarray(eFieldImagFlat[batchEnds[batchIdx]:batchEnds[batchIdx + 1], :]),
+                cudaCohFunR,
+                cudaCohFunI
+            )
+
+            # Move the array to the host
+            cohFunR = cudaCohFunR.copy_to_host()
+            cohFunI = cudaCohFunI.copy_to_host()
+
+            # Save the coherence function
+            np.save(workDir + "cohFunR_{}.npy".format(batchIdx), cohFunR)
+            np.save(workDir + "cohFunI_{}.npy".format(batchIdx), cohFunI)
+
+    if out == "contrast":
+        contrast = 0.0
+        for batchIdx in range(batchNum):
+            cohFunR = np.load(workDir + "cohFunR_{}.npy".format(batchIdx))
+            cohFunI = np.load(workDir + "cohFunI_{}.npy".format(batchIdx))
+
+            contrast += np.square(np.abs(cohFunR)) + np.square(np.abs(cohFunI))
+        return contrast
+    else:
+        print("The coherence function has been save to {}".format(workDir))
+
+
+@cuda.jit('void(int64, int64, int64, int64,' +
+          ' float64[:], float64[:], float64[:], float64[:], ' +
+          'float64[:,:], float64[:,:], float64[:,:], float64[:,:])')
+def getCoherenceFunctionXY_GPU_Method1(nSpatial1,
+                                       nSpatial2,
+                                       nz,
+                                       nSample,
+                                       deltaZx,
+                                       deltaZy,
+                                       deltaZz,
+                                       weight,
+                                       eFieldReal,
+                                       eFieldImag,
+                                       holderReal,
+                                       holderImag):
+    """
+    We divide the reshaped time-averaged coherence function along the first dimension.
+
+    :param nSpatial1:  The batch size
+    :param nSpatial2:  The length of the spatial index, which = nx * ny
+    :param nz:   The ends of the summation of the mutual coherence function
+    :param nSample:
+    :param deltaZx:
+    :param deltaZy:
+    :param deltaZz:
+    :param weight:
+    :param eFieldReal:
+    :param eFieldImag:
+    :param holderReal:
+    :param holderImag:
+    :return:
+    """
+    idx1, idx2 = cuda.grid(2)
+    if (idx1 < nSpatial1) & (idx2 < nSpatial2):
+        oldDeltaZ = 0
+        oldHolderRealTmp = 0.0
+        oldHolderImagTmp = 0.0
+
+        deltaZxy = deltaZx[idx2] + deltaZy[idx2] - (
+                deltaZx[idx1] + deltaZy[idx1])  # get the contribution from the xy direction in Q*(r2-r1)/k0
+
+        for sIdx in range(nSample):
+            deltaZ = int(deltaZxy + deltaZz(sIdx))  # Get the contribution from the z dimension
+
+            if abs(deltaZ) >= nz:
+                continue
+
+            # When deltaZ does not change, one does not need to calculate the time average again.
+            if deltaZ == oldDeltaZ:
+                # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
+                holderReal[idx1, idx2] += oldHolderRealTmp * weight[sIdx]
+                holderImag[idx1, idx2] += oldHolderImagTmp * weight[sIdx]
+                continue
+
+            # The delta Z determines the range over which time we calculate the average
+            zStart = max(0, -deltaZ)
+            zStop = min(nz, nz - deltaZ)
+
+            # Add the temporary holder
+            holderRealTmp = 0.0
+            holderImagTmp = 0.0
+
+            # Do the Time averaging
+            for tIdx in range(zStart, zStop):
+                holderRealTmp += eFieldReal[idx1, tIdx] * eFieldReal[idx2, tIdx + deltaZ]
+                holderRealTmp += eFieldImag[idx1, tIdx] * eFieldImag[idx2, tIdx + deltaZ]
+
+                holderImagTmp -= eFieldReal[idx1, tIdx] * eFieldImag[idx2, tIdx + deltaZ]
+                holderImagTmp += eFieldImag[idx1, tIdx] * eFieldReal[idx2, tIdx + deltaZ]
+
+            # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
+            holderReal[idx1, idx2] += holderRealTmp * weight[sIdx]
+            holderImag[idx1, idx2] += holderImagTmp * weight[sIdx]
+
+            # Update the infor for the same deltaZ
+            oldDeltaZ = int(deltaZ)
+            oldHolderRealTmp = float(holderRealTmp)
+            oldHolderImagTmp = float(holderImagTmp)
+
+
+#########################################################################################
 #                         Method 2
 #
 #            Get the contrast of each pulse individually.
@@ -58,7 +256,6 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         fileName = eFieldComplexFiles[eFieldIdx]
         eFieldComplex = np.load(fileName)
 
-
         eFieldRealFlat = np.ascontiguousarray(np.reshape(eFieldComplex.real, (nx * ny, nz)))
         eFieldImagFlat = np.ascontiguousarray(np.reshape(eFieldComplex.imag, (nx * ny, nz)))
         del eFieldComplex
@@ -69,10 +266,8 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         blockspergrid_y = math.ceil(numXY / threadsperblock[1])
         blockspergrid = (blockspergrid_x, blockspergrid_y)
 
-        contrastLocal = np.zeros(1, dtype=np.float64)
-        cuContrast = cuda.to_device(contrastLocal)
         # Update the coherence function
-        getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
+        contrastArray[eFieldIdx] = getCoherenceFunctionXY_GPU_Method2[[blockspergrid, threadsperblock]](
             numXY,
             nz,
             nSampleZ,
@@ -82,17 +277,14 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
             cuWeight,
             eFieldRealFlat,
             eFieldImagFlat,
-            cuContrast
-        )
-
-        contrastArray[eFieldIdx] = cuContrast.copy_to_host()[0]
+        ).copy_to_host()[0]
 
     return contrastArray
 
 
 @cuda.jit('void(int64, int64, int64,' +
           ' float64[:], float64[:], float64[:], float64[:], ' +
-          'float64[:,:], float64[:,:], float64[1])')
+          'float64[:,:], float64[:,:], float64[:,:], float64[:,:])')
 def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        nz,
                                        nSample,
@@ -101,12 +293,11 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        deltaZz,
                                        weight,
                                        eFieldReal,
-                                       eFieldImag,
-                                       contrastHolder):
+                                       eFieldImag, ):
     """
     We divide the reshaped time-averaged coherence function along the first dimension.
 
-    :param nSpatial:  The length of the spatial index, which = nx * ny
+    :param nSpatial1:  The length of the spatial index, which = nx * ny
     :param nz:   The ends of the summation of the mutual coherence function
     :param nSample:
     :param deltaZx:
@@ -115,10 +306,10 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
     :param weight:
     :param eFieldReal:
     :param eFieldImag:
-    :param contrastHolder:
     :return:
     """
     idx1, idx2 = cuda.grid(2)
+    contrast = cuda.device_array(1, np.float64)
 
     if (idx1 < nSpatial) & (idx2 < nSpatial):
         oldDeltaZ = 0
@@ -138,7 +329,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
                 # Add to the contrast
                 tmp = oldValue * weight[sIdx]
-                cuda.atomic.add(contrastHolder, 0, tmp)
+                cuda.atomic.add(contrast, 0, tmp)
                 continue
 
             # The delta Z determines the range over which time we calculate the average
@@ -158,11 +349,13 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 holderImagTmp += eFieldImag[idx1, tIdx] * eFieldReal[idx2, tIdx + deltaZ]
 
             newValue = holderRealTmp ** 2 + holderImagTmp ** 2
-            cuda.atomic.add(contrastHolder, 0, newValue * weight[sIdx])
+            cuda.atomic.add(contrast,0, newValue * weight[sIdx])
 
             # Update the infor for the same deltaZ
             oldDeltaZ = int(deltaZ)
             oldValue = float(newValue)
+
+    return contrast
 
 
 #########################################################################################
@@ -170,12 +363,12 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
 #
 #            Get the contrast of each pulse individually.
 #########################################################################################
-def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ, ):
+def getContrastMethod3(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampleZ, dSampleZ, ):
     """
     Very challenging calculation.
     Need to check with Yanwen about the definition of the calculation.
 
-    :param eFieldPairFiles:
+    :param eFieldComplexFiles:
     :param qVec:
     :param k0:
     :param nx:
@@ -212,24 +405,16 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
     cuWeight = cuda.to_device(weight)
 
     # Step2, Loop through the electric field
-    contrastArray = np.zeros((len(eFieldPairFiles), 2), dtype=np.float64)
+    contrastArray = np.zeros(len(eFieldComplexFiles), dtype=np.float64)
 
-    for eFieldIdx in range(len(eFieldPairFiles)):
+    for eFieldIdx in range(len(eFieldComplexFiles)):
         # Load the electric field
-        fileName1 = eFieldPairFiles[eFieldIdx][0]
-        eFieldComplex1 = np.load(fileName1)
+        fileName = eFieldComplexFiles[eFieldIdx]
+        eFieldComplex = np.load(fileName)
 
-        eFieldRealFlat1 = np.ascontiguousarray(np.reshape(eFieldComplex1.real, (nx * ny, nz)))
-        eFieldImagFlat1 = np.ascontiguousarray(np.reshape(eFieldComplex1.imag, (nx * ny, nz)))
-        del eFieldComplex1
-
-        # Load the electric field
-        fileName2 = eFieldPairFiles[eFieldIdx][1]
-        eFieldComplex2 = np.load(fileName2)
-
-        eFieldRealFlat2 = np.ascontiguousarray(np.reshape(eFieldComplex2.real, (nx * ny, nz)))
-        eFieldImagFlat2 = np.ascontiguousarray(np.reshape(eFieldComplex2.imag, (nx * ny, nz)))
-        del eFieldComplex2
+        eFieldRealFlat = np.ascontiguousarray(np.reshape(eFieldComplex.real, (nx * ny, nz)))
+        eFieldImagFlat = np.ascontiguousarray(np.reshape(eFieldComplex.imag, (nx * ny, nz)))
+        del eFieldComplex
 
         # Define gpu calculation batch
         threadsperblock = (16, 16)
@@ -246,11 +431,9 @@ def getContrastMethod3(eFieldPairFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSampl
             cuDeltaZy,
             cuDeltaZz,
             cuWeight,
-            eFieldRealFlat1,
-            eFieldImagFlat1,
-            eFieldRealFlat2,
-            eFieldImagFlat2,
-        ).copy_to_host()[:]
+            eFieldRealFlat,
+            eFieldImagFlat,
+        ).copy_to_host()[0]
 
     return contrastArray
 
@@ -291,8 +474,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
 
     if (idx1 < nSpatial) & (idx2 < nSpatial):
         oldDeltaZ = 0
-        oldValueReal = 0.0
-        oldValueImag = 0.0
+        oldValue = 0.0
 
         deltaZxy = deltaZx[idx2] + deltaZy[idx2] - (
                 deltaZx[idx1] + deltaZy[idx1])  # get the contribution from the xy direction in Q*(r2-r1)/k0
@@ -307,11 +489,8 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
             if deltaZ == oldDeltaZ:
                 # Because for the same z2 - z1, the summation is the same. One only needs to add a weight
                 # Add to the contrast
-                tmpReal = oldValueReal * weight[sIdx]
-                tmpImag = oldValueImag * weight[sIdx]
-
-                cuda.atomic.add(contrast, 0, tmpReal)
-                cuda.atomic.add(contrast, 1, tmpImag)
+                tmp = oldValue * weight[sIdx]
+                cuda.atomic.add(contrast, 0, tmp)
                 continue
 
             # The delta Z determines the range over which time we calculate the average
@@ -339,15 +518,12 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                 holderImagTmp2 -= eFieldReal2[idx1, tIdx] * eFieldImag2[idx2, tIdx + deltaZ]
                 holderImagTmp2 += eFieldImag2[idx1, tIdx] * eFieldReal2[idx2, tIdx + deltaZ]
 
-            newValueReal = holderRealTmp1 * holderRealTmp2 + holderImagTmp1 * holderImagTmp2
-            newValueImag = holderRealTmp1 * holderRealTmp2 - holderImagTmp1 * holderImagTmp2
-            cuda.atomic.add(contrast, 0, newValueReal * weight[sIdx])
-            cuda.atomic.add(contrast, 1, newValueImag * weight[sIdx])
+            newValue = holderRealTmp ** 2 + holderImagTmp ** 2
+            contrastReal += newValue * weight[sIdx]
 
             # Update the infor for the same deltaZ
             oldDeltaZ = int(deltaZ)
-            oldValueReal = float(newValueReal)
-            oldValueImag = float(newValueImag)
+            oldValue = float(newValue)
 
     return contrast
 
