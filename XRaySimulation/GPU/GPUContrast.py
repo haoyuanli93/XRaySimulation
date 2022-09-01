@@ -53,7 +53,7 @@ def getContrastMethod1(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
         # Load the electric field
         fileName = eFieldComplexFiles[eFieldIdx]
 
-        # 
+        #
 
 @cuda.jit('()')
 def getCoherenceFunctionXY_GPU_Method1(nSpatial,
