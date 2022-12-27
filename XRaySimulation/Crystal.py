@@ -21,7 +21,7 @@ wavenumber = util.kev_to_wavevec_length(bragg_energy)
 cot_pi_8 = 1. + np.sqrt(2)
 
 
-class ChannelCut:
+class ChannelCut():
     def __int__(self,
                 crystal_type="Silicon",
                 miller_index="220",
