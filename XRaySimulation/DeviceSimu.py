@@ -115,10 +115,10 @@ def get_bragg_reflectivity_per_entry(kin, thickness, crystal_h, normal, chi_dict
 
     # Extract the parameter
     chi0 = chi_dict["chi0"]
-    chih_sigma = chi_dict["chi0"]
-    chihbar_sigma = chi_dict["chi0"]
-    chih_pi = chi_dict["chi0"]
-    chihbar_pi = chi_dict["chi0"]
+    chih_sigma = chi_dict["chih_sigma"]
+    chihbar_sigma = chi_dict["chihbar_sigma"]
+    chih_pi = chi_dict["chih_pi"]
+    chihbar_pi = chi_dict["chihbar_pi"]
 
     # ----------------------------------------------
     #    Get reflected wave-vectors
@@ -248,6 +248,72 @@ def get_bragg_rocking_curve(kin,
     return angles, reflect_sigma, reflect_pi, b_factor, kout
 
 
+def get_bragg_rocking_curve_channelcut(kin,
+                                       channelcut,
+                                       scan_range,
+                                       scan_number,
+                                       ):
+    """
+
+    :param kin:
+    :param channelcut
+    :param scan_range:
+    :param scan_number:
+    :return:
+    """
+
+    # ------------------------------------------------------------
+    #          Step 0: Generate h_array and normal_array for the scanning
+    # ------------------------------------------------------------
+    h_array_1 = np.zeros((scan_number, 3), dtype=np.float64)
+    normal_array_1 = np.zeros((scan_number, 3), dtype=np.float64)
+
+    h_array_2 = np.zeros((scan_number, 3), dtype=np.float64)
+    normal_array_2 = np.zeros((scan_number, 3), dtype=np.float64)
+
+    # Get the scanning angle
+    angles = np.linspace(start=-scan_range / 2, stop=scan_range / 2, num=scan_number)
+
+    for idx in range(scan_number):
+        rot_mat = util.rot_mat_in_yz_plane(theta=angles[idx])
+
+        h_array_1[idx] = rot_mat.dot(channelcut.crystal_list[0].h)
+        normal_array_1[idx] = rot_mat.dot(channelcut.crystal_list[0].normal)
+
+        h_array_2[idx] = rot_mat.dot(channelcut.crystal_list[1].h)
+        normal_array_2[idx] = rot_mat.dot(channelcut.crystal_list[1].normal)
+
+    # Create holder to save the reflectivity and output momentum
+    kin_grid = np.zeros_like(h_array_1, dtype=np.float64)
+    kin_grid[:, 0] = kin[0]
+    kin_grid[:, 1] = kin[1]
+    kin_grid[:, 2] = kin[2]
+
+    (reflect_sigma_1,
+     reflect_pi_1,
+     b_factor_1,
+     kout_1) = get_bragg_reflectivity_per_entry(kin=kin_grid,
+                                                thickness=channelcut.crystal_list[0].thickness,
+                                                crystal_h=h_array_1,
+                                                normal=normal_array_1,
+                                                chi_dict=channelcut.crystal_list[0].chi_dict)
+
+    (reflect_sigma_2,
+     reflect_pi_2,
+     b_factor_2,
+     kout_2) = get_bragg_reflectivity_per_entry(kin=kout_1,
+                                                thickness=channelcut.crystal_list[1].thickness,
+                                                crystal_h=h_array_2,
+                                                normal=normal_array_2,
+                                                chi_dict=channelcut.crystal_list[1].chi_dict)
+
+    return (angles,
+            reflect_sigma_1 * reflect_sigma_2,
+            reflect_pi_1 * reflect_pi_2,
+            b_factor_1 * b_factor_2,
+            kout_2)
+
+
 # -------------------------------------------------------------
 #               Alignment
 # -------------------------------------------------------------
@@ -359,6 +425,98 @@ def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
                              ref_point=rot_center)
     if get_curve:
         return angles, np.square(np.abs(reflect_s))
+
+
+def align_channel_cut_dynamical_bragg_reflection(channelcut,
+                                                 kin,
+                                                 scan_range=0.0005,
+                                                 scan_number=10000,
+                                                 rot_center=None,
+                                                 get_curve=False):
+    """
+    Align the crystal such that the incident wave vector is at the center of the
+    reflectivity curve
+
+    :param channelcut:
+    :param kin:
+    :param scan_range:
+    :param scan_number:
+    :param rot_center:
+    :param get_curve:
+    :return:
+    """
+    if rot_center is None:
+        rot_center = np.copy(channelcut.crystal_list[0].surface_point)
+
+    # ------------------------------------------------------
+    # Align the channel-cut such that the reciprocal lattice is anti-parallel to the kin
+    # ------------------------------------------------------
+    # 1 Get the angle
+    cos_val = (np.dot(kin, channelcut.crystal_list[0].h)
+               / np.linalg.norm(kin) / np.linalg.norm(channelcut.crystal_list[0].h))
+    rot_angle = np.arccos(np.clip(cos_val, -1.0, 1.0))
+
+    # 2 Try the rotation
+    rot_mat = util.rot_mat_in_yz_plane(theta=rot_angle)
+    new_h = np.dot(rot_mat, channelcut.crystal_list[0].h)
+
+    if np.dot(new_h, kin) / np.linalg.norm(new_h) / np.linalg.norm(kin) > - 0.999:
+        # print("aaa")
+        rot_mat = util.rot_mat_in_yz_plane(theta=-rot_angle)
+
+    channelcut.rotate_wrt_point(rot_mat=rot_mat,
+                                ref_point=rot_center)
+
+    # ------------------------------------------------------
+    # Align the channel-cut according to the geometric Bragg angle.
+    # The rotation direction is determined by the crystal geometry.
+    # ------------------------------------------------------
+    # Rotate according to the geometric Bragg angle
+    geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
+                                           plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
+
+    # Rotate the channel-cut according to the geometry of the channel-cut crystal
+    if channelcut.first_crystal_loc == "lower left":
+        rot_mat = util.rot_mat_in_yz_plane(theta=-geo_Bragg_angle)
+    elif channelcut.first_crystal_loc == "upper left":
+        rot_mat = util.rot_mat_in_yz_plane(theta=-geo_Bragg_angle)
+    else:
+        print("The value of first_crystal_loc of the channel-cut can only be either lower left or uppper left."
+              "Please check the value."
+              "No rotation is implemented.")
+        return 0
+
+    channelcut.rotate_wrt_point(rot_mat=rot_mat,
+                                ref_point=np.copy(rot_center),
+                                include_boundary=True)
+
+    # ------------------------------------------------------
+    # Refine the alignment with dynamical diffraction theory.
+    # ------------------------------------------------------
+    # Align the crystal with dynamical diffraction theory
+    (angles,
+     reflect_s,
+     reflect_p,
+     b_array,
+     kout_grid) = get_bragg_rocking_curve_channelcut(kin=kin,
+                                                     channelcut=channelcut,
+                                                     scan_range=scan_range,
+                                                     scan_number=scan_number,
+                                                     )
+
+    rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
+
+    # Third: find bandwidth of the rocking curve and the center of the rocking curve
+    fwhm, angle_adjust = util.get_fwhm(coordinate=angles,
+                                       curve_values=rocking_curve,
+                                       center=True)
+
+    # Fourth: Align the crystal along that direction.
+    rot_mat = util.rot_mat_in_yz_plane(theta=angle_adjust)
+    channelcut.rotate_wrt_point(rot_mat=rot_mat,
+                                ref_point=np.copy(rot_center))
+    if get_curve:
+        return angles, rocking_curve, b_array
 
 
 def align_grating_normal_direction(grating, axis):

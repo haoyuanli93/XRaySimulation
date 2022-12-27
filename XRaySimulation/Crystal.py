@@ -23,28 +23,93 @@ cot_pi_8 = 1. + np.sqrt(2)
 
 class ChannelCut:
     def __int__(self,
-                h_list=np.array([[0, wavenumber, 0],
-                                 [0, -wavenumber, 0],
-                                 ], dtype=np.float64),
-                normal_list=np.array([[0, -1, 0],
-                                      [0, 1, 0],
-                                      ], dtype=np.float64),
+                crystal_type="Silicon",
+                miller_index="220",
+                energy_keV=10.0,
                 thickness_list=np.array([1e4, 1e4]),
-                surface_point_list=np.array([[0, 0, 0],
-                                             [5e4, 1e4, 0],
-                                             ], dtype=np.float64),
-                chi_dict_list=None,
+                gap=1e4,
                 edge_length_list=np.array([5e4, 5e4]),
+                asymmetry_angle_list=np.deg2rad(np.array([0., 0.])),
+                first_surface_loc="lower left",
                 ):
+        """
+        Calculate the geometry
+
+                 X-ray goes from the top left to bottom right incident on the first crystal.
+
+                                                                        edge length
+                                                                 --------------------------
+                                                                 |       Crystal 2        |
+                                                                 --------------------------
+                                                         ---
+                                                          |
+                                                          |  Gap, distance between the two surface center is
+                                 edge length              |             gap / tan(Bragg)
+                            --------------------------   ---
+                            |       Crystal 1        |
+                            --------------------------
+
+                If the mirror symmetric flag is true, then the first crystal is on the top.
+        """
+
+        # TODO: Explain to Selene why I am doing this and ask her to write down the comment
+
         # Add a type to help functions to choose how to treat this object
         self.type = "Channel cut with two surfaces"
 
-        self.crystal_list = [CrystalBlock3D(h=h_list[x],
-                                            normal=normal_list[x],
-                                            surface_point=surface_point_list[x],
-                                            thickness=thickness_list[x],
-                                            chi_dict=chi_dict_list[x],
-                                            edge_length=edge_length_list[x]) for x in range(2)]
+        # The location of the first crystal determines which direction should the channel-cut rotate
+        self.first_crystal_loc = first_surface_loc
+
+        # Get the atomic plane distance.
+        crystal_property = get_crystal_param(crystal_type=crystal_type,
+                                             miller_index=miller_index,
+                                             energy_kev=energy_keV)
+
+        # Get wave-length
+        wave_length = 2 * np.pi / util.kev_to_wavevec_length(energy=energy_keV)
+
+        # Get geometric bragg angle
+        bragg_theta = util.get_bragg_angle(wave_length=wave_length, plane_distance=crystal_property['d'])
+
+        # Create 2 crystals
+        self.crystal_list = [
+            CrystalBlock3D(h=np.array([0., 2. * np.pi / crystal_property['d'], 0.]),
+                           normal=np.array([0., -np.cos(asymmetry_angle_list[x]), np.sin(asymmetry_angle_list[x])]),
+                           surface_point=np.zeros(3, dtype=np.float64),
+                           thickness=thickness_list[x],
+                           chi_dict=crystal_property,
+                           edge_length=edge_length_list[x]) for x in range(2)]
+
+        # Shift and rotate crystals to the correct position
+        if first_surface_loc == "lower left":
+            displacement = np.array([0, gap, gap / np.tan(bragg_theta)])
+
+            # Shift the surface center
+            self.crystal_list[1].shift(displacement=displacement, include_boundary=True)
+
+            # Rotate the crystal
+            rot_mat = np.array([[1., 0., 0., ],
+                                [0., 0., 1., ],
+                                [0., -1., 0., ],
+                                ], dtype=np.float64)
+            self.crystal_list[1].rotate_wrt_point(rot_mat=rot_mat,
+                                                  ref_point=np.copy(self.crystal_list[1].surface_point),
+                                                  include_boundary=True)
+        elif first_surface_loc == "upper left":
+            # Rotate the first crystal
+            rot_mat = np.array([[1., 0., 0., ],
+                                [0., 0., 1., ],
+                                [0., -1., 0., ],
+                                ], dtype=np.float64)
+            self.crystal_list[0].rotate_wrt_point(rot_mat=rot_mat,
+                                                  ref_point=np.copy(self.crystal_list[0].surface_point),
+                                                  include_boundary=True)
+
+            # Shift the second crystal
+            displacement = np.array([0, -gap, gap / np.tan(bragg_theta)])
+
+            # Shift the surface center
+            self.crystal_list[1].shift(displacement=displacement, include_boundary=True)
 
     def shift(self, displacement, include_boundary=True):
         for x in range(2):
@@ -66,7 +131,7 @@ class ChannelCut:
         """
         for x in range(2):
             self.crystal_list[x].rotate_wrt_point(rot_mat=rot_mat,
-                                                  ref_point=ref_point,
+                                                  ref_point=np.copy(ref_point),
                                                   include_boundary=include_boundary)
 
 
@@ -230,14 +295,15 @@ class CrystalBlock3D:
         :param include_boundary:
         :return:
         """
+        tmp = np.copy(ref_point)
         # Step 1: shift with respect to that point
-        self.shift(displacement=-ref_point, include_boundary=include_boundary)
+        self.shift(displacement=-np.copy(tmp), include_boundary=include_boundary)
 
         # Step 2: rotate the quantities
         self.rotate(rot_mat=rot_mat, include_boundary=include_boundary)
 
         # Step 3: shift it back to the reference point
-        self.shift(displacement=ref_point, include_boundary=include_boundary)
+        self.shift(displacement=np.copy(tmp), include_boundary=include_boundary)
 
 
 class RectangleGrating:
