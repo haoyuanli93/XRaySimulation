@@ -50,6 +50,16 @@ class ChannelCut:
                             --------------------------
 
                 If the mirror symmetric flag is true, then the first crystal is on the top.
+
+        :param crystal_type:
+        :param miller_index:
+        :param energy_keV:
+        :param thickness_list:
+        :param gap:
+        :param edge_length_list:
+        :param asymmetry_angle_list:
+        :param first_surface_loc:
+        :return:
         """
 
         # TODO: Explain to Selene why I am doing this and ask her to write down the comment
