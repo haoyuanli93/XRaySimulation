@@ -99,8 +99,8 @@ class ChannelCut:
 
             # Rotate the crystal
             rot_mat = np.array([[1., 0., 0., ],
-                                [0., 0., 1., ],
                                 [0., -1., 0., ],
+                                [0., 0., -1., ],
                                 ], dtype=np.float64)
             self.crystal_list[1].rotate_wrt_point(rot_mat=rot_mat,
                                                   ref_point=np.copy(self.crystal_list[1].surface_point),
@@ -108,8 +108,8 @@ class ChannelCut:
         elif first_surface_loc == "upper left":
             # Rotate the first crystal
             rot_mat = np.array([[1., 0., 0., ],
-                                [0., 0., 1., ],
                                 [0., -1., 0., ],
+                                [0., 0., -1., ],
                                 ], dtype=np.float64)
             self.crystal_list[0].rotate_wrt_point(rot_mat=rot_mat,
                                                   ref_point=np.copy(self.crystal_list[0].surface_point),

@@ -131,7 +131,7 @@ def get_bragg_reflectivity_per_entry(kin, thickness, crystal_h, normal, chi_dict
     dot_kh = np.sum(np.multiply(kin, crystal_h), axis=-1)
 
     gamma_0 = np.divide(dot_kn, klen_grid)
-    gamma_h = np.divide(dot_kn + np.dot(crystal_h, normal), klen_grid)
+    gamma_h = np.divide(dot_kn + np.sum(np.multiply(crystal_h, normal), axis=-1), klen_grid)
 
     b_factor = np.divide(gamma_0, gamma_h).astype(np.complex128)
     alpha = np.divide(2 * dot_kh + np.sum(np.square(crystal_h), axis=-1), np.square(klen_grid))
