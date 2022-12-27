@@ -88,7 +88,8 @@ def getContrastMethod2(eFieldComplexFiles, qVec, k0, nx, ny, nz, dx, dy, dz, nSa
     return contrastArray
 
 
-@cuda.jit('void(int64, int64, int64, float64[:], float64[:], float64[:], float64[:], float64[:,:], float64[:,:], float64[:])')
+@cuda.jit(
+    'void(int64, int64, int64, float64[:], float64[:], float64[:], float64[:], float64[:,:], float64[:,:], float64[:])')
 def getCoherenceFunctionXY_GPU_Method2(nSpatial,
                                        nz,
                                        nSample,
@@ -123,7 +124,7 @@ def getCoherenceFunctionXY_GPU_Method2(nSpatial,
         deltaZxy = deltaZx[idx2] + deltaZy[idx2] - (
                 deltaZx[idx1] + deltaZy[idx1])  # get the contribution from the xy direction in Q*(r2-r1)/k0
 
-        for sIdx in range(2 * nSample - 1 ):
+        for sIdx in range(2 * nSample - 1):
             deltaZ = int(deltaZxy + deltaZz[sIdx])  # Get the contribution from the z dimension
 
             if abs(deltaZ) >= nz:

@@ -15,14 +15,13 @@ however.
 # Essential To-Do list
 1. Add unit test module
 2. Release a stable version.
-3. Add functions to calculate quantities with prism 
-
-
-# Potential To-Do List
-The following feature has not been implemented
-1. Add automatic calculation of the electric susceptibility.
-2. Add the bragg angle automatically.
-3. Add Add Gaussian smoothing to the FWHM function.  
+3. Add functions to calculate quantities with prism
+4. The one thing that I am most unsatisfied about this simulation 
+    is that different functions 
+    are not in most appropriate position.
+    This makes it not easy to start a new simulation.
+   I want to re-arrange the functions to make the location of each function 
+    more reasonable. 
 
 # Notice
 ### Optimization

@@ -1,19 +1,19 @@
 import requests
 
 
-def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
+def get_crystal_param(crystal_type, miller_index, energy_kev):
     """
 
-    :param CrystalType:
-    :param MillerIndex:
-    :param EnergyKeV:
+    :param crystal_type:
+    :param miller_index:
+    :param energy_kev:
     :return:
     """
 
     ###########################################################
     #    Get response from the website
     ###########################################################
-    if CrystalType in ("Silicon", "Germanium", "Diamond"):
+    if crystal_type in ("Silicon", "Germanium", "Diamond", "GaAs"):
         pass
     else:
         print("The requested crystal type is not recognized. Please check the source code.")
@@ -25,16 +25,16 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
 
     commandline = str(r"https://x-server.gmca.aps.anl.gov/cgi/x0h_form.exe?"
                       + r"xway={}".format(2)
-                      + r'&wave={}'.format(EnergyKeV)
+                      + r'&wave={}'.format(energy_kev)
                       + r'&line='
                       + r'&coway={}'.format(0)
-                      + r'&code={}'.format(CrystalType)
+                      + r'&code={}'.format(crystal_type)
                       + r'&amor='
                       + r'&chem='
                       + r'&rho='
-                      + r'&i1={}'.format(MillerIndex[0])
-                      + r'&i2={}'.format(MillerIndex[1])
-                      + r'&i3={}'.format(MillerIndex[2])
+                      + r'&i1={}'.format(miller_index[0])
+                      + r'&i2={}'.format(miller_index[1])
+                      + r'&i3={}'.format(miller_index[2])
                       + r'&df1df2={}'.format(df1df2)
                       + r'&modeout={}'.format(modeout)
                       + r'&detail={}'.format(detail))
@@ -125,7 +125,7 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
                     words = line.split()
                     b = float(words[-1])
 
-                    info_holder.update({"chi_s": complex(a, -b)})
+                    info_holder.update({"chih_sigma": complex(a, -b)})
 
                 elif words[-1] == 'pol=Pi':
                     # Get the real part
@@ -140,7 +140,7 @@ def getCrystalParam(CrystalType, MillerIndex, EnergyKeV):
                     words = line.split()
                     b = float(words[-1])
 
-                    info_holder.update({"chi_p": complex(a, -b)})
+                    info_holder.update({"chih_pi": complex(a, -b)})
                 elif words[1] == "Bragg":
                     if words[2] == "angle":
                         info_holder.update({"Bragg angle (deg)": float(words[-1])})

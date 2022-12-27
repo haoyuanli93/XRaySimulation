@@ -876,27 +876,25 @@ def get_bragg_reflection_sigma_polarization(reflectivity_sigma,
           'float64, float64,'
           'complex128, complex128, complex128,'
           'int64)')
-def get_bragg_reflection_sigma_full(reflectivity_sigma,
-                                    phase_grid,
-                                    kout_grid,
-                                    efield_grid,
-                                    jacobian,
-                                    klen_grid,
-                                    kin_grid,
-                                    d,
-                                    h,
-                                    n,
-                                    dot_sn,
-                                    dot_hn,
-                                    h_square,
-                                    chi0, chih_sigma,
-                                    chihbar_sigma, num):
+def get_bragg_reflection_sigma(reflectivity_sigma,
+                               phase_grid,
+                               kout_grid,
+                               efield_grid,
+                               jacobian,
+                               klen_grid,
+                               kin_grid,
+                               d,
+                               h,
+                               n,
+                               dot_sn,
+                               dot_hn,
+                               h_square,
+                               chi0, chih_sigma,
+                               chihbar_sigma, num):
     """
-    Given the crystal info, the input electric field, this function returns the
-    reflectivity for the sigma polarization and pi polarization and the
-    diffracted electric field.
 
     :param reflectivity_sigma:
+    :param phase_grid:
     :param kout_grid:
     :param efield_grid:
     :param jacobian:
@@ -917,9 +915,6 @@ def get_bragg_reflection_sigma_full(reflectivity_sigma,
     idx = cuda.grid(1)
     if idx < num:
 
-        #####################################################################################################
-        # Step 1: Get parameters for reflectivity and decompose input field
-        #####################################################################################################
         # ------------------------------------
         #     Get the diffracted wave number
         # ------------------------------------
@@ -956,15 +951,18 @@ def get_bragg_reflection_sigma_full(reflectivity_sigma,
         # Get the jacobian :   dot(kout, n) / dot(kin, n)
         jacobian[idx] *= complex(math.fabs((dot_kn + dot_hn + m_trans) / dot_kn))
 
-        #####################################################################################################
-        # Step 2: Get the reflectivity and field
-        #####################################################################################################
+        # ----------------------------------------
+        #     Get reflectivity
+        # ----------------------------------------
         # Get alpha tidle
         alpha_tidle = complex((alpha * b + chi0.real * (1. - b)) / 2., chi0.imag * (1. - b) / 2.)
 
         # Get sqrt(alpha**2 + beta**2) value
         sqrt_a2_b2 = cmath.sqrt(alpha_tidle ** 2 + b_complex * chih_sigma * chihbar_sigma)
 
+        # The operation is for the numerical stability
+        # If the term is negative, then it would cause an NAN when we take
+        # the exponential with large crystal thickness.
         if sqrt_a2_b2.imag < 0:
             sqrt_a2_b2 = - sqrt_a2_b2
 
@@ -972,6 +970,17 @@ def get_bragg_reflection_sigma_full(reflectivity_sigma,
         re = klen * d / gamma_0 * sqrt_a2_b2.real
         im = klen * d / gamma_0 * sqrt_a2_b2.imag
 
+        magnitude = complex(math.exp(-im))
+
+        phase = complex(math.cos(re), math.sin(re))
+        # Calculate some intermediate part
+        numerator = 1. - magnitude * phase
+        denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+        # Assemble everything
+        reflectivity_sigma[idx] = b_complex * chih_sigma * numerator / denominator
+
+        """
         # Take care of the exponential
         if im <= 400.:
             magnitude = complex(math.exp(-im))
@@ -990,6 +999,7 @@ def get_bragg_reflection_sigma_full(reflectivity_sigma,
 
             # Assemble everything
             reflectivity_sigma[idx] = b_complex * chih_sigma / denominator
+        """
 
         # Get the phase term:
         phase_grid[idx] -= m_trans * dot_sn
@@ -1048,7 +1058,6 @@ def get_bragg_reflection_sigma_phase(reflectivity_sigma,
     """
     idx = cuda.grid(1)
     if idx < num:
-
         #####################################################################################################
         # Step 1: Get parameters for reflectivity and decompose input field
         #####################################################################################################

@@ -1,11 +1,10 @@
 import numpy as np
 import sys
 import time
-import matplotlib.pyplot as plt
 
 sys.path.append("/cds/home/h/haoyuan/Documents/my_repos/XRaySimulation/")
 
-from XRaySimulation import util, misc, GenesisTool, Crystal, MultiDevice
+from XRaySimulation import util, GenesisTool, Crystal, DeviceSimu
 from XRaySimulation.GPU import GPUMultiDevice
 
 # Load essential info for all simulation

@@ -1,4 +1,5 @@
 import numpy as np
+
 from XRaySimulation import util
 
 hbar = util.hbar  # This is the reduced planck constant in keV/fs
@@ -52,7 +53,7 @@ class GaussianPulse3D:
                               dtype=np.complex128)
 
         self.k0 = np.array([0., 0., self.klen0])
-        self.n = self.k0 / util.l2_norm(self.k0)
+        self.n = self.k0 / np.linalg.norm(self.k0)
         self.omega0 = self.klen0 * util.c
         self.x0 = x0
 
@@ -172,7 +173,9 @@ def get_square_pulse_spectrum_smooth(k_grid, k0, a_val, b_val, c_val, scaling, s
     return np.multiply(spectrum, gaussian)
 
 
-def getGaussianModeSum(nx, ny, nz, dx, dy, dz, nGaussian=50,
+def getGaussianModeSum(nx, ny, nz,
+                       dx, dy, dz,
+                       nGaussian=50,
                        modeSizeX=10, modeSizeY=10, modeSizeZ=0.9,
                        modeCenterSpreadX=0.1, modeCenterSpreadY=0.1, modeCenterSpreadZ=1.5,
                        k0=100,
@@ -215,11 +218,11 @@ def getGaussianModeSum(nx, ny, nz, dx, dy, dz, nGaussian=50,
         modeField = np.ones((nx, ny, nz), dtype=np.float64)
 
         modeField *= np.exp(
-            - np.square(np.arange(- nx // 2 + 1, nx - nx // 2 ) * dx - modeCenter[modeIdx, 0])
+            - np.square(np.arange(- nx // 2 + 1, nx - nx // 2) * dx - modeCenter[modeIdx, 0])
             / 2. / modeSizeX ** 2)[:, np.newaxis, np.newaxis]
 
         modeField *= np.exp(
-            - np.square(np.arange(- ny // 2 + 1, ny - ny // 2 ) * dy - modeCenter[modeIdx, 1])
+            - np.square(np.arange(- ny // 2 + 1, ny - ny // 2) * dy - modeCenter[modeIdx, 1])
             / 2. / modeSizeY ** 2)[np.newaxis, :, np.newaxis]
 
         modeField *= np.exp(

@@ -5,6 +5,7 @@ fs, um are the units
 """
 
 import numpy as np
+import requests
 
 from XRaySimulation import util
 
@@ -20,13 +21,63 @@ wavenumber = util.kev_to_wavevec_length(bragg_energy)
 cot_pi_8 = 1. + np.sqrt(2)
 
 
+class ChannelCut:
+    def __int__(self,
+                h_list=np.array([[0, wavenumber, 0],
+                                 [0, -wavenumber, 0],
+                                 ], dtype=np.float64),
+                normal_list=np.array([[0, -1, 0],
+                                      [0, 1, 0],
+                                      ], dtype=np.float64),
+                thickness_list=np.array([1e4, 1e4]),
+                surface_point_list=np.array([[0, 0, 0],
+                                             [5e4, 1e4, 0],
+                                             ], dtype=np.float64),
+                chi_dict_list=None,
+                edge_length_list=np.array([5e4, 5e4]),
+                ):
+        # Add a type to help functions to choose how to treat this object
+        self.type = "Channel cut with two surfaces"
+
+        self.crystal_list = [CrystalBlock3D(h=h_list[x],
+                                            normal=normal_list[x],
+                                            surface_point=surface_point_list[x],
+                                            thickness=thickness_list[x],
+                                            chi_dict=chi_dict_list[x],
+                                            edge_length=edge_length_list[x]) for x in range(2)]
+
+    def shift(self, displacement, include_boundary=True):
+        for x in range(2):
+            self.crystal_list[x].shift(displacement=displacement,
+                                       include_boundary=include_boundary)
+
+    def rotate(self, rot_mat, include_boundary=True):
+        for x in range(2):
+            self.crystal_list[x].rotate(rot_mat=rot_mat,
+                                        include_boundary=include_boundary)
+
+    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=True):
+        """
+        This is a function designed
+        :param rot_mat:
+        :param ref_point:
+        :param include_boundary:
+        :return:
+        """
+        for x in range(2):
+            self.crystal_list[x].rotate_wrt_point(rot_mat=rot_mat,
+                                                  ref_point=ref_point,
+                                                  include_boundary=include_boundary)
+
+
 class CrystalBlock3D:
     def __init__(self,
                  h=np.array([0, wavenumber, 0], dtype=np.float64),
                  normal=np.array([0., -1., 0.]),
                  surface_point=np.zeros(3, dtype=np.float64),
-                 thickness=1e6,
-                 chi_dict=None):
+                 thickness=1e4,
+                 chi_dict=None,
+                 edge_length=5e4):
         """
 
         :param h:
@@ -34,6 +85,7 @@ class CrystalBlock3D:
         :param surface_point:
         :param thickness:
         :param chi_dict:
+        :param edge_length: The length of the surface edge
         """
         # Add a type to help functions to choose how to treat this object
         self.type = "Crystal: Bragg Reflection"
@@ -71,6 +123,8 @@ class CrystalBlock3D:
         # hbar component of electric susceptibility's fourier transform
         self.chihbar_pi = chi_dict["chihbar_pi"]
 
+        self.chi_dict = chi_dict.copy()
+
         #############################
         # Second level of parameters. These parameters can be handy in the simulation_2019_11_5_2
         #############################
@@ -81,11 +135,28 @@ class CrystalBlock3D:
         #############################
         # These parameters are designed for the light path simulation for the experiment
         #############################
-        # The boundary_2d is defined in such a way that
-        # boundary_2d[0] is the first point on the boundary.
-        # boundary_2d[1] is the second ...
-        # If one connect all the point in sequence, then one get the whole boundary.
-        self.boundary = np.zeros((4, 3))
+        #      The boundary is defined in the following way
+        #
+        #    (top, left) point 0        (middle perpendicular to self.normal) self.surface_point      point 1
+        #      parallel to h
+        #       point 3                                                                               point 2
+        #
+
+        # direction perpendicular to the normal direction
+        direction1 = np.outer(np.array([1, 0, 0]), self.normal)
+        direction1 /= np.linalg.norm(direction1)
+
+        # direction parallel to the reciprocal lattice
+        direction2 = - self.h / np.linalg.norm(self.h)
+
+        point0 = self.surface_point - direction1 * edge_length / 2.
+        point1 = self.surface_point + direction1 * edge_length / 2.
+        point2 = point1 + thickness * direction2
+        point3 = point2 - direction1 * edge_length
+        point4 = np.copy(point0)
+
+        # Assemble
+        self.boundary = np.vstack([point0, point1, point2, point3, point4])
 
     def set_h(self, reciprocal_lattice):
         self.h = np.array(reciprocal_lattice)
@@ -118,21 +189,6 @@ class CrystalBlock3D:
         :return:
         """
         self.thickness = d
-
-    def set_chi0(self, chi0):
-        self.chi0 = chi0
-
-    def set_chih_sigma(self, chih):
-        self.chih_sigma = chih
-
-    def set_chihbar_sigma(self, chihb):
-        self.chihbar_sigma = chihb
-
-    def set_chih_pi(self, chih):
-        self.chih_pi = chih
-
-    def set_chihbar_pi(self, chihb):
-        self.chihbar_pi = chihb
 
     def _update_dot_nh(self):
         self.dot_hn = np.dot(self.normal, self.h)
@@ -260,7 +316,7 @@ class RectangleGrating:
         self.surface_point = surface_point
 
     def set_normal(self, normal):
-        self.normal = normal / util.l2_norm(normal)
+        self.normal = normal / np.linalg.norm(normal)
         self.__update_h()
 
     def set_diffraction_order(self, order):
@@ -311,3 +367,160 @@ class Prism:
         self.wavevec_delta = wavevec_delta  # (um)
         self.surface_point = np.zeros(3, dtype=np.float64)
         self.normal = np.array([0, 0, 1], dtype=np.float64)
+
+
+def get_crystal_param(crystal_type, miller_index, energy_kev):
+    """
+
+    :param crystal_type:
+    :param miller_index:
+    :param energy_kev:
+    :return:
+    """
+
+    ###########################################################
+    #    Get response from the website
+    ###########################################################
+    if crystal_type in ("Silicon", "Germanium", "Diamond", "GaAs"):
+        pass
+    else:
+        print("The requested crystal type is not recognized. Please check the source code.")
+        return
+
+    df1df2 = -1
+    modeout = 1  # 0 - html out, 1 - quasy-text out with keywords
+    detail = 0  # 0 - don't print coords, 1 = print coords
+
+    commandline = str(r"https://x-server.gmca.aps.anl.gov/cgi/x0h_form.exe?"
+                      + r"xway={}".format(2)
+                      + r'&wave={}'.format(energy_kev)
+                      + r'&line='
+                      + r'&coway={}'.format(0)
+                      + r'&code={}'.format(crystal_type)
+                      + r'&amor='
+                      + r'&chem='
+                      + r'&rho='
+                      + r'&i1={}'.format(miller_index[0])
+                      + r'&i2={}'.format(miller_index[1])
+                      + r'&i3={}'.format(miller_index[2])
+                      + r'&df1df2={}'.format(df1df2)
+                      + r'&modeout={}'.format(modeout)
+                      + r'&detail={}'.format(detail))
+
+    data = requests.get(commandline).text
+
+    #############################################################
+    #   Parse the parameters
+    #############################################################
+    lines = data.split("\n")
+    info_holder = {}
+
+    line_idx = 0
+    total_line_num = len(lines)
+
+    while line_idx < total_line_num:
+        line = lines[line_idx]
+        words = line.split()
+        # print(words)
+        if words:
+            if words[0] == "Density":
+                info_holder.update({"Density (g/cm^3)": float(words[-1])})
+
+            elif words[0] == "Unit":
+                info_holder.update({"Unit cell a1 (A)": float(words[-1])})
+
+                # Get a2
+                line_idx += 1
+                line = lines[line_idx]
+                words = line.split()
+                info_holder.update({"Unit cell a2 (A)": float(words[-1])})
+
+                # Get a3
+                line_idx += 1
+                line = lines[line_idx]
+                words = line.split()
+                info_holder.update({"Unit cell a3 (A)": float(words[-1])})
+
+                # Get a4
+                line_idx += 1
+                line = lines[line_idx]
+                words = line.split()
+                info_holder.update({"Unit cell a4 (deg)": float(words[-1])})
+
+                # Get a5
+                line_idx += 1
+                line = lines[line_idx]
+                words = line.split()
+                info_holder.update({"Unit cell a5 (deg)": float(words[-1])})
+
+                # Get a6
+                line_idx += 1
+                line = lines[line_idx]
+                words = line.split()
+                info_holder.update({"Unit cell a6 (deg)": float(words[-1])})
+
+            elif words[0] == "Poisson":
+                info_holder.update({"Poisson ratio": float(words[-1])})
+
+            elif words[0] == '<pre>':
+                if words[1] == '<i>n':
+
+                    # Get the real part of chi0
+                    a = float(words[-1][4:])
+
+                    # Get the imagniary part of chi0
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
+
+                    # Add an entry
+                    info_holder.update({"chi0": complex(a, b)})
+
+                    # Skip the following two lines
+                    line_idx += 2
+
+                elif words[-1] == 'pol=Sigma':
+                    # Get the real part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    a = float(words[-1])
+
+                    # Get the imaginary part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
+
+                    info_holder.update({"chih_sigma": complex(a, -b)})
+
+                elif words[-1] == 'pol=Pi':
+                    # Get the real part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    a = float(words[-1])
+
+                    # Get the imaginary part
+                    line_idx += 1
+                    line = lines[line_idx]
+                    words = line.split()
+                    b = float(words[-1])
+
+                    info_holder.update({"chih_pi": complex(a, -b)})
+                elif words[1] == "Bragg":
+                    if words[2] == "angle":
+                        info_holder.update({"Bragg angle (deg)": float(words[-1])})
+                else:
+                    pass
+
+            elif words[0] == 'Interplanar':
+                info_holder.update({"d": float(words[-1]) * 1e-4})
+
+            else:
+                pass
+
+        line_idx += 1
+
+    return info_holder

@@ -1,5 +1,11 @@
+import datetime
+import time
+
+import h5py as h5
+import matplotlib.pyplot as plt
 import numpy as np
-from XRaySimulation import misc
+
+# from XRaySimulation.Crystal import get_bragg_rocking_curve
 
 """
 This module is the lowest-level module. It does not depend on another modules.
@@ -10,25 +16,6 @@ two_pi = 2. * np.pi
 hbar = 0.0006582119514  # This is the reduced planck constant in keV/fs
 
 c = 299792458. * 1e-9  # The speed of light in um / fs
-
-
-# --------------------------------------------------------------
-#               Simple functions
-# --------------------------------------------------------------
-def l2_norm(x):
-    return np.sqrt(np.sum(np.square(x)))
-
-
-def l2_square(x):
-    return np.sum(np.square(x))
-
-
-def l2_norm_batch(x):
-    return np.sqrt(np.sum(np.square(x), axis=-1))
-
-
-def l2_square_batch(x):
-    return np.sum(np.square(x), axis=-1)
 
 
 # --------------------------------------------------------------
@@ -161,23 +148,25 @@ def get_bragg_kout(kin, h, normal):
     gammah = np.dot(kin + h, normal) / klen
     alpha = (2 * np.dot(kin, h) + np.dot(h, h)) / np.square(klen)
 
-    if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
-        momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
-    else:
-         momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
+    # if np.abs(-gammah - np.sqrt(gammah ** 2 - alpha)) > np.abs(-gammah + np.sqrt(gammah ** 2 - alpha)):
+    #    momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
+    # else:
+    #    #momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
+    #    pass
 
+    momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
     # Add momentum transfer
     kout += normal * momentum
 
     return kout
 
 
-def get_bragg_kout_array(kin, h, normal):
+def get_bragg_kout_array(kin, crystal_h, normal):
     """
     This function produce the output wave vector from a Bragg reflection.
 
     :param kin: (n, 3) numpy array. The incident wave vector
-    :param h: The reciprocal lattice of the crystal
+    :param crystal_h: The reciprocal lattice of the crystal
     :param normal: The normal direction of the reflection surface.
                     For a bragg reflection, n is pointing to the inside of the crystal.
 
@@ -185,14 +174,14 @@ def get_bragg_kout_array(kin, h, normal):
     """
 
     # kout holder
-    kout = kin + h[np.newaxis, :]
+    kout = kin + crystal_h[np.newaxis, :]
 
     # Incident wave number
     klen = np.sqrt(np.sum(np.square(kin), axis=-1))
 
     # Get gamma and alpha
     gammah = np.dot(kout, normal) / klen
-    alpha = (2 * np.dot(kin, h) + np.dot(h, h)) / np.square(klen)
+    alpha = (2 * np.dot(kin, crystal_h) + np.dot(crystal_h, crystal_h)) / np.square(klen)
 
     # Get the momentum transfer
     momentum = klen * (-gammah - np.sqrt(gammah ** 2 - alpha))
@@ -227,9 +216,9 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     #          Step 1: Get output momentum wave vector
     # ------------------------------------------------------------
     # Get some info to facilitate the calculation
-    klen_grid = l2_norm_batch(kin_grid)
+    klen_grid = np.linalg.norm(kin_grid, axis=-1)
     dot_hn = np.dot(h, n)
-    h_square = l2_square(h)
+    h_square = np.sum(np.square(h))
 
     # Get gamma and alpha and b
     dot_kn = np.dot(kin_grid, n)
@@ -283,11 +272,11 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    mask = np.zeros_like(im, dtype=np.bool)
-    mask[im <= 100] = True
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 100] = True
 
     reflect_s = chih_sigma * b_cplx / denominator
-    reflect_s[mask] = chih_sigma * b_cplx[mask] * numerator[mask] / denominator[mask]
+    # reflect_s[mask] = chih_sigma * b_cplx[mask] * numerator[mask] / denominator[mask]
 
     # ------------------------------------------------------------
     # Step 2: Get the reflectivity for pi polarization
@@ -317,151 +306,13 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    mask = np.zeros_like(im, dtype=np.bool)
-    mask[im <= 400] = True
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 400] = True
 
     reflect_p = bp * chih_pi / denominator
-    reflect_p[mask] = bp[mask] * chih_pi * numerator[mask] / denominator[mask]
+    # reflect_p[mask] = bp[mask] * chih_pi * numerator[mask] / denominator[mask]
 
     return reflect_s, reflect_p, b, kout_grid
-
-
-def get_bragg_rocking_curve(kin, scan_range, scan_number, h_initial, normal_initial, thickness,
-                            chi0, chih_sigma, chihbar_sigma,
-                            chih_pi, chihbar_pi):
-    """
-
-    :param kin:
-    :param scan_range:
-    :param scan_number:
-    :param h_initial:
-    :param normal_initial:
-    :param thickness:
-    :param chi0:
-    :param chih_sigma:
-    :param chihbar_sigma:
-    :param chih_pi:
-    :param chihbar_pi:
-    :return:
-    """
-
-    # ------------------------------------------------------------
-    #          Step 0: Generate h_array and normal_array for the scanning
-    # ------------------------------------------------------------
-    h_array = np.zeros((scan_number, 3), dtype=np.float64)
-    normal_array = np.zeros((scan_number, 3), dtype=np.float64)
-
-    # Get the scanning angle
-    angles = np.linspace(start=-scan_range / 2, stop=scan_range / 2, num=scan_number)
-
-    for idx in range(scan_number):
-        rot_mat = rot_mat_in_yz_plane(theta=angles[idx])
-        h_array[idx] = rot_mat.dot(h_initial)
-        normal_array[idx] = rot_mat.dot(normal_initial)
-
-    # Create holder to save the reflectivity and output momentum
-    kout_grid = np.zeros_like(h_array, dtype=np.float64)
-
-    # ------------------------------------------------------------
-    #          Step 1: Get output momentum wave vector
-    # ------------------------------------------------------------
-    # Get some info to facilitate the calculation
-    klen = l2_norm(kin)
-    dot_hn = np.dot(h_initial, normal_initial)
-    h_square = l2_square(h_initial)
-
-    # Get gamma and alpha and b
-    dot_kn_grid = np.dot(normal_array, kin)
-    dot_kh_grid = np.dot(h_array, kin)
-
-    gamma_0 = dot_kn_grid / klen
-    gamma_h = (dot_kn_grid + dot_hn) / klen
-
-    b_array = np.divide(gamma_0, gamma_h)
-    b_list_cplx = b_array.astype(np.complex128)
-    alpha_array = (2 * dot_kh_grid + h_square) / np.square(klen)
-
-    # Get momentum tranfer
-    sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha_array)
-
-    mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
-    mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
-
-    m_trans = klen * (-gamma_h - sqrt_gamma_alpha)
-    m_trans[mask] = klen * (-gamma_h[mask] + sqrt_gamma_alpha[mask])
-
-    # Update the kout_grid
-    kout_grid[:, 0] = kin[0] + h_array[:, 0] + m_trans * normal_array[:, 0]
-    kout_grid[:, 1] = kin[1] + h_array[:, 1] + m_trans * normal_array[:, 1]
-    kout_grid[:, 2] = kin[2] + h_array[:, 2] + m_trans * normal_array[:, 2]
-
-    # ------------------------------------------------------------
-    # Step 2: Get the reflectivity for input sigma polarization
-    # ------------------------------------------------------------
-    # Get alpha tidle
-    alpha_tidle = (alpha_array * b_array + chi0 * (1. - b_array)) / 2.
-
-    # Get sqrt(alpha**2 + beta**2) value
-    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + chih_sigma * chihbar_sigma * b_list_cplx)
-
-    # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
-    mask[sqrt_a2_b2.imag < 0] = True
-    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
-
-    # Calculate the phase term
-    re = klen * thickness / gamma_0 * sqrt_a2_b2.real
-    im = klen * thickness / gamma_0 * sqrt_a2_b2.imag
-
-    magnitude = np.exp(-im).astype(np.complex128)
-    phase = np.cos(re) + np.sin(re) * 1.j
-
-    # Calculate some intermediate part
-    numerator = 1. - magnitude * phase
-    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
-
-    # Take care of the exponential
-    mask = np.zeros_like(im, dtype=np.bool)
-    mask[im <= 400] = True
-
-    reflect_s = chih_sigma * b_list_cplx / denominator
-    reflect_s[mask] = chih_sigma * b_list_cplx[mask] * numerator[mask] / denominator[mask]
-
-    # ------------------------------------------------------------
-    # Step 2: Get the reflectivity for pi polarization
-    # ------------------------------------------------------------
-
-    # Get the polarization factor with the asymmetric factor b.
-    p_value = complex(1.)  # np.dot(kout_grid, kin) / np.square(klen)
-    bp_array = b_list_cplx * p_value
-
-    # Get sqrt(alpha**2 + beta**2) value
-    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp_array * p_value * chih_pi * chihbar_pi)
-
-    # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
-    mask[sqrt_a2_b2.imag < 0] = True
-    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
-
-    # Calculate the phase term
-    re = klen * thickness / gamma_0 * sqrt_a2_b2.real
-    im = klen * thickness / gamma_0 * sqrt_a2_b2.imag
-
-    magnitude = np.exp(-im).astype(np.complex128)
-    phase = np.cos(re) + np.sin(re) * 1.j
-
-    # Calculate some intermediate part
-    numerator = 1. - magnitude * phase
-    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
-
-    # Take care of the exponential
-    mask = np.zeros_like(im, dtype=np.bool)
-    mask[im <= 400] = True
-
-    reflect_p = bp_array * chih_pi / denominator
-    reflect_p[mask] = bp_array[mask] * chih_pi * numerator[mask] / denominator[mask]
-
-    return angles, reflect_s, reflect_p, b_array, kout_grid
 
 
 # --------------------------------------------------------------
@@ -503,8 +354,7 @@ def get_total_path_length(point_list):
     number = len(point_list)
     total_path = 0.
     for idx in range(number - 1):
-        total_path += l2_norm(point_list[idx + 1] -
-                              point_list[idx])
+        total_path += np.linalg.norm(point_list[idx + 1] - point_list[idx])
 
     return total_path
 
@@ -571,7 +421,7 @@ def get_square_grating_transmission(kin, height_vec, ab_ratio, base, refractive_
 
     # Step 3: Update the momentum and the length of the momentum
     kout = kin + order * grating_k
-    klen = l2_norm(kout)
+    klen = np.linalg.norm(kout)
 
     return factor, kout, klen
 
@@ -770,237 +620,6 @@ def get_image_from_telescope_for_cpa(object_point, lens_axis, lens_position, foc
     return image_position
 
 
-# -------------------------------------------------------------
-#               Alignment
-# -------------------------------------------------------------
-def align_crystal_reciprocal_lattice(crystal, axis, rot_center=None):
-    """
-
-    :param crystal: The crystal to align
-    :param axis: The direction along which the reciprocal lattice will be aligned.
-    :param rot_center:
-    :return:
-    """
-    if rot_center is None:
-        rot_center = crystal.surface_point
-
-    # 1 Get the angle
-    cos_val = np.dot(axis, crystal.h) / l2_norm(axis) / l2_norm(crystal.h)
-    rot_angle = np.arccos(np.clip(cos_val, -1, 1))
-
-    # print("rot_angle:{:.2e}".format(np.rad2deg(rot_angle)))
-
-    # 2 Try the rotation
-    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
-    new_h = np.dot(rot_mat, crystal.h)
-    # print(new_h)
-
-    if np.dot(new_h, axis) / l2_norm(new_h) / l2_norm(axis) < 0.999:
-        # print("aaa")
-        rot_mat = rot_mat_in_yz_plane(theta=-rot_angle)
-
-    crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=rot_center)
-
-
-def align_crystal_geometric_bragg_reflection(crystal, kin, rot_direction=1, rot_center=None):
-    if rot_center is None:
-        rot_center = crystal.surface_point
-
-    ###########################
-    #   Align the recirpocal lattice with kin
-    ###########################
-    align_crystal_reciprocal_lattice(crystal=crystal, axis=kin, rot_center=rot_center)
-    # print(crystal.h)
-
-    ###########################
-    #   Alignment based on geometric theory of bragg diffraction
-    ###########################
-    # Estimate the Bragg angle
-    bragg_estimation = get_bragg_angle(wave_length=two_pi / l2_norm(kin),
-                                       plane_distance=two_pi / l2_norm(crystal.h))
-
-    # print("Bragg angle:{:.2e}".format(np.rad2deg(bragg_estimation)))
-
-    # Align the crystal to the estimated Bragg angle
-    rot_mat = rot_mat_in_yz_plane(theta=(bragg_estimation + np.pi / 2) * rot_direction)
-
-    crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=rot_center)
-
-
-def align_crystal_dynamical_bragg_reflection(crystal, kin, rot_direction=1,
-                                             scan_range=0.0005, scan_number=10000,
-                                             rot_center=None,
-                                             get_curve=False):
-    """
-    Align the crystal such that the incident wave vector is at the center of the
-    reflectivity curve
-
-    :param crystal:
-    :param kin:
-    :param rot_direction:
-    :param scan_range:
-    :param scan_number:
-    :param rot_center:
-    :param get_curve:
-    :return:
-    """
-    if rot_center is None:
-        rot_center = crystal.surface_point
-
-    # Align the crystal with geometric bragg reflection theory
-    align_crystal_geometric_bragg_reflection(crystal=crystal,
-                                             kin=kin,
-                                             rot_direction=rot_direction,
-                                             rot_center=rot_center)
-
-    # Align the crystal with dynamical diffraction theory
-    (angles,
-     reflect_s,
-     reflect_p,
-     b_array,
-     kout_grid) = get_bragg_rocking_curve(kin=kin,
-                                          scan_range=scan_range,
-                                          scan_number=scan_number,
-                                          h_initial=crystal.h,
-                                          normal_initial=crystal.normal,
-                                          thickness=crystal.thickness,
-                                          chi0=crystal.chi0,
-                                          chih_sigma=crystal.chih_sigma,
-                                          chihbar_sigma=crystal.chihbar_sigma,
-                                          chih_pi=crystal.chih_pi,
-                                          chihbar_pi=crystal.chihbar_pi)
-
-    # rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
-
-    # Third: find bandwidth of the rocking curve and the center of the rocking curve
-    fwhm, angle_adjust = misc.get_fwhm(coordinate=angles,
-                                       curve_values=np.square(np.abs(reflect_s)),
-                                       center=True)
-
-    # Fourth: Align the crystal along that direction.
-    rot_mat = rot_mat_in_yz_plane(theta=angle_adjust)
-    crystal.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=rot_center)
-    if get_curve:
-        return angles, np.square(np.abs(reflect_s))
-
-
-def align_grating_normal_direction(grating, axis):
-    # 1 Get the angle
-    cos_val = np.dot(axis, grating.normal) / l2_norm(axis) / l2_norm(grating.normal)
-    rot_angle = np.arccos(cos_val)
-
-    # 2 Try the rotation
-    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
-    new_h = np.dot(rot_mat, grating.normal)
-
-    if np.dot(new_h, axis) < 0:
-        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
-
-    grating.rotate_wrt_point(rot_mat=rot_mat,
-                             ref_point=grating.surface_point)
-
-
-def align_telescope_optical_axis(telescope, axis):
-    # 1 Get the angle
-    cos_val = np.dot(axis, telescope.lens_axis) / l2_norm(axis) / l2_norm(telescope.lens_axis)
-    rot_angle = np.arccos(cos_val)
-
-    # 2 Try the rotation
-    rot_mat = rot_mat_in_yz_plane(theta=rot_angle)
-    new_h = np.dot(rot_mat, telescope.lens_axis)
-
-    if np.dot(new_h, axis) < 0:
-        rot_mat = rot_mat_in_yz_plane(theta=rot_angle + np.pi)
-
-    telescope.rotate_wrt_point(rot_mat=rot_mat,
-                               ref_point=telescope.lens_point)
-
-
-# --------------------------------------------------------------------------------------------------------------
-#       Wrapper functions for different devices
-# --------------------------------------------------------------------------------------------------------------
-def get_kout(device, kin):
-    """
-    Get the output wave vector given the incident wave vector
-
-    :param device:
-    :param kin:
-    :return:
-    """
-    # Get output wave vector
-    if device.type == "Crystal: Bragg Reflection":
-        kout = get_bragg_kout(kin=kin,
-                              h=device.h,
-                              normal=device.normal)
-        return kout
-
-    if device.type == "Transmissive Grating":
-        kout = kin + device.momentum_transfer
-        return kout
-
-    if device.type == "Transmission Telescope for CPA":
-        kout = get_telescope_kout(optical_axis=device.lens_axis,
-                                  kin=kin)
-        return kout
-
-
-def get_intensity_efficiency_sigma_polarization(device, kin):
-    """
-    Get the output intensity efficiency for the given wave vector
-    assuming a monochromatic plane incident wave.
-
-    :param device:
-    :param kin:
-    :return:
-    """
-    # Get output wave vector
-    if device.type == "Crystal: Bragg Reflection":
-        tmp = np.zeros((1, 3))
-        tmp[0, :] = kin
-
-        (reflect_s,
-         reflect_p,
-         b,
-         kout_grid) = get_bragg_reflection_array(kin_grid=tmp,
-                                                 d=device.thickness,
-                                                 h=device.h,
-                                                 n=device.normal,
-                                                 chi0=device.chi0,
-                                                 chih_sigma=device.chih_sigma,
-                                                 chihbar_sigma=device.chihbar_sigma,
-                                                 chih_pi=device.chih_pi,
-                                                 chihbar_pi=device.chihbar_pi)
-
-        efficiency = np.square(np.abs(reflect_s)) / np.abs(b)
-        return efficiency
-
-    if device.type == "Transmissive Grating":
-
-        # Determine the grating order
-        if device.order == 0:
-            efficiency = get_square_grating_0th_transmission(kin=kin,
-                                                             height_vec=device.h,
-                                                             refractive_index=device.n,
-                                                             ab_ratio=device.ab_ratio,
-                                                             base=device.thick_vec)
-        else:
-            efficiency, _, _ = get_square_grating_transmission(kin=kin,
-                                                               height_vec=device.h,
-                                                               ab_ratio=device.ab_ratio,
-                                                               base=device.thick_vec,
-                                                               refractive_index=device.n,
-                                                               order=device.order,
-                                                               grating_k=device.momentum_transfer)
-        # Translate to the intensity efficiency
-        return np.square(np.abs(efficiency))
-
-    if device.type == "Transmission Telescope for CPA":
-        return np.square(np.abs(device.efficiency))
-
-
 #####################################################################
 #     New functions
 #####################################################################
@@ -1062,3 +681,252 @@ def get_fft_mesh_2d(dy, ny, yc, dz, nz, zc):
     k_grid[:, :, 2] = kz_list[np.newaxis, :]
 
     return k_grid
+
+
+########################################################################################################################
+#                    For I/O operation
+########################################################################################################################
+def save_branch_result_to_h5file(file_name, io_type, branch_name,
+                                 result_3d_dict, result_2d_dict, check_dict):
+    with h5.File(file_name, io_type) as h5file:
+        group = h5file.create_group(branch_name)
+        # Save the meta data
+        group_check = group.create_group('check')
+        for entry in list(check_dict.keys()):
+            group_check.create_dataset(entry, data=check_dict[entry])
+
+        group_2d = group.create_group('result_2d')
+        for entry in list(result_2d_dict.keys()):
+            group_2d.create_dataset(entry, data=result_2d_dict[entry])
+
+        group_3d = group.create_group('result_3d')
+        for entry in list(result_3d_dict.keys()):
+            group_3d.create_dataset(entry, data=result_3d_dict[entry])
+
+
+def time_stamp():
+    """
+    Get a time stamp
+    :return: A time stamp of the form '%Y_%m_%d_%H_%M_%S'
+    """
+    stamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d_%H_%M_%S')
+    return stamp
+
+
+########################################################################################################################
+#                     Curve analysis
+########################################################################################################################
+def get_fwhm(coordinate, curve_values, center=False):
+    """
+    Get the FWHM in the straightforward way.
+    However, notice that, when one calculate the FWHM in this way, the result
+    is sensitive to small perturbations of the curve's shape.
+
+    :param coordinate:
+    :param curve_values:
+    :param center: Whether return the coordinate of the center of the region within FWHM
+    :return:
+    """
+    # Get the half max value
+    half_max = np.max(curve_values) / 2.
+
+    # Get the indexes for the range.
+    indexes = np.arange(len(coordinate), dtype=np.int64)
+    mask = np.zeros_like(indexes, dtype=np.bool)
+    mask[curve_values >= half_max] = True
+
+    indexes_above = indexes[mask]
+
+    # Get the ends of the region
+    left_idx = np.min(indexes_above)
+    right_idx = np.max(indexes_above)
+
+    # Convert the indexes into coordinates
+    fwhm = coordinate[right_idx] - coordinate[left_idx]
+
+    if center:
+        distribution = curve_values[mask]
+        distribution /= np.sum(distribution)
+
+        coordinate_roi = coordinate[mask]
+
+        mean = np.sum(np.multiply(distribution, coordinate_roi))
+
+        return fwhm, mean
+    else:
+        return fwhm
+
+
+def get_statistics(distribution, coor=None):
+    # Get a holder for the analysis result
+    holder = {"2d slice": {},
+              "2d projection": {},
+              "1d slice": {},
+              "1d projection": {},
+              }
+
+    # Get distribution shape
+    dist_shape = np.array(distribution.shape, dtype=np.int64)
+    center_position = dist_shape // 2
+    x_c = center_position[0]
+    y_c = center_position[1]
+    z_c = center_position[2]
+
+    # Get the 2d slice
+    tmp_xy = distribution[:, :, z_c]
+    tmp_xz = distribution[:, y_c, :]
+    tmp_yz = distribution[x_c, :, :]
+    holder['2d slice'].update({"xy": np.copy(tmp_xy),
+                               "xz": np.copy(tmp_xz),
+                               "yz": np.copy(tmp_yz),
+                               })
+
+    # Get 2d projection
+    tmp_xy = np.sum(distribution, axis=2)
+    tmp_xz = np.sum(distribution, axis=1)
+    tmp_yz = np.sum(distribution, axis=0)
+    holder['2d projection'].update({"xy": np.copy(tmp_xy),
+                                    "xz": np.copy(tmp_xz),
+                                    "yz": np.copy(tmp_yz),
+                                    })
+
+    # Get 1d slice
+    holder['1d slice'].update({"x": np.copy(distribution[:, y_c, z_c]),
+                               "y": np.copy(distribution[x_c, :, z_c]),
+                               "z": np.copy(distribution[x_c, y_c, :]),
+                               })
+
+    # Get 1d projection
+    holder['1d projection'].update({"x": np.copy(np.sum(tmp_xy, axis=1)),
+                                    "y": np.copy(np.sum(tmp_xy, axis=0)),
+                                    "z": np.copy(np.sum(tmp_xz, axis=0)),
+                                    })
+
+    if coor is not None:
+        # Create an entry called sigma to get the sigma and FWHM
+        holder.update({"sigma": {},
+                       "fwhm": {}})
+
+        for axis in ['x', 'y', 'z']:
+            # Normalize to get the distribution
+            tmp = np.copy(holder['1d projection'][axis])
+            prob_dist = tmp / np.sum(tmp)
+
+            # Get sigma
+            mean = np.sum(np.multiply(prob_dist, coor[axis]))
+            std = np.sum(np.multiply(np.square(coor[axis]), prob_dist)) - np.square(mean)
+
+            holder["sigma"].update({axis: np.copy(std)})
+
+            # Get fwhm
+            holder["fwhm"].update({axis: get_fwhm(coordinate=coor[axis], curve_values=prob_dist)})
+
+    return holder
+
+
+def get_gaussian_fit(curve, coordinate):
+    """
+    Fit the target curve with a Gaussian function
+    :param curve:
+    :param coordinate:
+    :return:
+    """
+    total = np.sum(curve)
+    distribution = curve / total
+
+    mean = np.sum(np.multiply(distribution, coordinate))
+    std = np.sum(np.multiply(distribution, np.square(coordinate))) - mean ** 2
+    std = np.sqrt(std)
+
+    gaussian_fit = np.exp(- np.square(coordinate - mean) / 2. / std ** 2)
+    gaussian_fit /= np.sum(gaussian_fit)
+
+    gaussian_fit *= total
+    return gaussian_fit
+
+
+############################################################
+#     Show stats
+############################################################
+def show_stats_2d(stats_holder, fig_height, fig_width):
+    fig, axes = plt.subplots(nrows=3, ncols=2)
+
+    fig.set_figheight(fig_height)
+    fig.set_figwidth(fig_width)
+
+    #########################################
+    #    xy slice and projection
+    #########################################
+    im00 = axes[0, 0].imshow(stats_holder['2d slice']['xy'], cmap='jet')
+    axes[0, 0].set_title("XY Slice")
+    axes[0, 0].set_axis_off()
+    fig.colorbar(im00, ax=axes[0, 0])
+
+    im01 = axes[0, 1].imshow(stats_holder['2d projection']['xy'], cmap='jet')
+    axes[0, 1].set_title("XY Projection")
+    axes[0, 1].set_axis_off()
+    fig.colorbar(im01, ax=axes[0, 1])
+
+    #########################################
+    #    xz slice and projection
+    #########################################
+    im10 = axes[1, 0].imshow(stats_holder['2d slice']['xz'], cmap='jet', aspect="auto")
+    axes[1, 0].set_title("XZ Slice")
+    axes[1, 0].set_axis_off()
+    fig.colorbar(im10, ax=axes[1, 0])
+
+    im11 = axes[1, 1].imshow(stats_holder['2d projection']['xz'], cmap='jet', aspect="auto")
+    axes[1, 1].set_title("XZ Projection")
+    axes[1, 1].set_axis_off()
+    fig.colorbar(im11, ax=axes[1, 1])
+
+    #########################################
+    #    yz slice and projection
+    #########################################
+    im20 = axes[2, 0].imshow(stats_holder['2d slice']['yz'], cmap='jet', aspect="auto")
+    axes[2, 0].set_title("YZ Slice")
+    axes[2, 0].set_axis_off()
+    fig.colorbar(im20, ax=axes[2, 0])
+
+    im21 = axes[2, 1].imshow(stats_holder['2d projection']['yz'], cmap='jet', aspect="auto")
+    axes[2, 1].set_title("YZ Projection")
+    axes[2, 1].set_axis_off()
+    fig.colorbar(im21, ax=axes[2, 1])
+
+    plt.show()
+
+
+def show_stats_1d(stats_holder, coor, fig_height, fig_width):
+    fig, axes = plt.subplots(nrows=3, ncols=2)
+
+    fig.set_figheight(fig_height)
+    fig.set_figwidth(fig_width)
+
+    #########################################
+    #    x slice and projection
+    #########################################
+    axes[0, 0].plot(coor['x'], stats_holder['1d slice']['x'])
+    axes[0, 0].set_title("X Slice")
+
+    axes[0, 1].plot(coor['x'], stats_holder['1d projection']['x'])
+    axes[0, 1].set_title("X Projection")
+
+    #########################################
+    #    y slice and projection
+    #########################################
+    axes[1, 0].plot(coor['y'], stats_holder['1d slice']['y'])
+    axes[1, 0].set_title("Y Slice")
+
+    axes[1, 1].plot(coor['y'], stats_holder['1d projection']['y'])
+    axes[1, 1].set_title("Y Projection")
+
+    #########################################
+    #    yz slice and projection
+    #########################################
+    axes[2, 0].plot(coor['z'], stats_holder['1d slice']['z'])
+    axes[2, 0].set_title("Z Slice")
+
+    axes[2, 1].plot(coor['z'], stats_holder['1d projection']['z'])
+    axes[2, 1].set_title("Z Projection")
+
+    plt.show()
