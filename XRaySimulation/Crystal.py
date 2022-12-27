@@ -21,17 +21,17 @@ wavenumber = util.kev_to_wavevec_length(bragg_energy)
 cot_pi_8 = 1. + np.sqrt(2)
 
 
-class ChannelCut():
-    def __int__(self,
-                crystal_type="Silicon",
-                miller_index="220",
-                energy_keV=10.0,
-                thickness_list=np.array([1e4, 1e4]),
-                gap=1e4,
-                edge_length_list=np.array([5e4, 5e4]),
-                asymmetry_angle_list=np.deg2rad(np.array([0., 0.])),
-                first_surface_loc="lower left",
-                ):
+class ChannelCut:
+    def __init__(self,
+                 crystal_type="Silicon",
+                 miller_index="220",
+                 energy_keV=10.0,
+                 thickness_list=np.array([1e4, 1e4]),
+                 gap=1e4,
+                 edge_length_list=np.array([5e4, 5e4]),
+                 asymmetry_angle_list=np.deg2rad(np.array([0., 0.])),
+                 first_surface_loc="lower left",
+                 ):
         """
         Calculate the geometry
 
