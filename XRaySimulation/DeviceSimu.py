@@ -19,10 +19,10 @@ def get_bragg_reflectivity_fix_crystal(kin, thickness, crystal_h, normal, chi_di
 
     # Extract the parameter
     chi0 = chi_dict["chi0"]
-    chih_sigma = chi_dict["chi0"]
-    chihbar_sigma = chi_dict["chi0"]
-    chih_pi = chi_dict["chi0"]
-    chihbar_pi = chi_dict["chi0"]
+    chih_sigma = chi_dict["chih_sigma"]
+    chihbar_sigma = chi_dict["chih_sigma"]
+    chih_pi = chi_dict["chih_pi"]
+    chihbar_pi = chi_dict["chih_pi"]
 
     # ----------------------------------------------
     #    Get reflected wave-vectors
@@ -116,9 +116,9 @@ def get_bragg_reflectivity_per_entry(kin, thickness, crystal_h, normal, chi_dict
     # Extract the parameter
     chi0 = chi_dict["chi0"]
     chih_sigma = chi_dict["chih_sigma"]
-    chihbar_sigma = chi_dict["chihbar_sigma"]
+    chihbar_sigma = chi_dict["chih_sigma"]
     chih_pi = chi_dict["chih_pi"]
-    chihbar_pi = chi_dict["chihbar_pi"]
+    chihbar_pi = chi_dict["chih_pi"]
 
     # ----------------------------------------------
     #    Get reflected wave-vectors
