@@ -192,13 +192,13 @@ class CrystalBlock3D:
         self.chih_sigma = chi_dict["chih_sigma"]
 
         # hbar component of electric susceptibility's fourier transform
-        self.chihbar_sigma = chi_dict["chihbar_sigma"]
+        self.chihbar_sigma = chi_dict["chih_sigma"]
 
         # h component of electric susceptibility's fourier transform
         self.chih_pi = chi_dict["chih_pi"]
 
         # hbar component of electric susceptibility's fourier transform
-        self.chihbar_pi = chi_dict["chihbar_pi"]
+        self.chihbar_pi = chi_dict["chih_pi"]
 
         self.chi_dict = chi_dict.copy()
 
