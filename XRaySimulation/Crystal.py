@@ -110,6 +110,8 @@ class ChannelCut:
 
             # Shift the surface center
             self.crystal_list[1].shift(displacement=displacement, include_boundary=True)
+        else:
+            print("The first_surface_loc has to be lower left or upper left")
 
     def shift(self, displacement, include_boundary=True):
         for x in range(2):
