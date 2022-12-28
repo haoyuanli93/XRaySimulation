@@ -462,7 +462,7 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
 
     if np.dot(new_h, kin) / np.linalg.norm(new_h) / np.linalg.norm(kin) > - 0.999:
         # print("aaa")
-        rot_mat = util.rot_mat_in_yz_plane(theta=-rot_angle)
+        rot_mat = util.rot_mat_in_yz_plane(theta=rot_angle + np.pi)
 
     channelcut.rotate_wrt_point(rot_mat=rot_mat,
                                 ref_point=rot_center)
@@ -475,11 +475,13 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
     geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
                                            plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
 
+    print("The geometric Bragg angle is {:.2f} deg".format(np.rad2deg(geo_Bragg_angle)))
+
     # Rotate the channel-cut according to the geometry of the channel-cut crystal
     if channelcut.first_crystal_loc == "lower left":
-        rot_mat = util.rot_mat_in_yz_plane(theta=-geo_Bragg_angle)
+        rot_mat = util.rot_mat_in_yz_plane(theta=np.pi / 2. - geo_Bragg_angle)
     elif channelcut.first_crystal_loc == "upper left":
-        rot_mat = util.rot_mat_in_yz_plane(theta=-geo_Bragg_angle)
+        rot_mat = util.rot_mat_in_yz_plane(theta= - np.pi / 2. + geo_Bragg_angle)
     else:
         print("The value of first_crystal_loc of the channel-cut can only be either lower left or uppper left."
               "Please check the value."

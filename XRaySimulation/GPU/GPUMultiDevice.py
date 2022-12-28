@@ -77,6 +77,9 @@ def get_multicrystal_reflection(kin_grid,
                                              ))
 
         # Assemble the output from each array
+        output_dict.update({"spectrum_grid": np.concatenate([entry['spectrum_grid'] for entry in output_list],
+                                                            axis=0)})
+
         if flag_reflectivity:
             output_dict.update({"reflectivity": np.concatenate([entry['reflectivity'] for entry in output_list],
                                                                axis=0)})
@@ -92,9 +95,7 @@ def get_multicrystal_reflection(kin_grid,
         if flag_phase:
             output_dict.update({"phase_grid": np.concatenate([entry['phase_grid'] for entry in output_list],
                                                              axis=0)})
-        if flag_phase:
-            output_dict.update({"spectrum_grid": np.concatenate([entry['spectrum_grid'] for entry in output_list],
-                                                                axis=0)})
+        return output_dict
 
     else:
         print("The batch_num has to be an integer larger than or equal to 1. ")
@@ -244,6 +245,7 @@ def _get_multicrystal_reflection(kin_grid,
     ############################################################################################################
 
     output_dict = {}
+    output_dict.update({"spectrum_grid": cuda_spectrum.copy_to_host()})
     if flag_reflectivity:
         output_dict.update({"reflectivity": cuda_reflect_total_sigma.copy_to_host()})
     if flag_jacobian:
@@ -254,7 +256,5 @@ def _get_multicrystal_reflection(kin_grid,
         output_dict.update({"kout_len_grid": cuda_klen_grid.copy_to_host()})
     if flag_phase:
         output_dict.update({"phase_grid": cuda_phase.copy_to_host()})
-    if flag_phase:
-        output_dict.update({"spectrum_grid": cuda_spectrum.copy_to_host()})
 
     return output_dict

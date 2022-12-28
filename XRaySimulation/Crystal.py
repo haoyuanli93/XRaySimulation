@@ -220,7 +220,7 @@ class CrystalBlock3D:
         #
 
         # direction perpendicular to the normal direction
-        direction1 = np.outer(np.array([1, 0, 0]), self.normal)
+        direction1 = np.cross(np.array([1, 0, 0]), self.normal)
         direction1 /= np.linalg.norm(direction1)
 
         # direction parallel to the reciprocal lattice
