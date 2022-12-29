@@ -558,6 +558,37 @@ def get_k_mesh_1d(number, energy_range):
     return k_grid, axis_info
 
 
+def get_coordinate(nx, ny, nz, dx, dy, dz, k0=0):
+    """
+    
+    :param nx:
+    :param ny:
+    :param nz:
+    :param dx:
+    :param dy:
+    :param dz:
+    :param k0:
+    :return:
+    """
+    xCoor = np.arange(nx) * dx - nx * dx / 2.
+    yCoor = np.arange(ny) * dy - ny * dy / 2.
+    zCoor = np.arange(nz) * dz - nz * dz / 2.
+    tCoor = zCoor / c
+
+    # Get k mesh
+    kxCoor = np.fft.fftshift(np.fft.fftfreq(nx, d=dx) * 2 * np.pi)
+    kyCoor = np.fft.fftshift(np.fft.fftfreq(ny, d=dy) * 2 * np.pi)
+    kzCoor = np.fft.fftshift(np.fft.fftfreq(nz, d=dz) * 2 * np.pi)
+    kzCoor += k0
+
+    # Convert wavevector to photon energy for illustration
+    ExCoor = wavevec_to_kev(kxCoor)
+    EyCoor = wavevec_to_kev(kyCoor)
+    EzCoor = wavevec_to_kev(kzCoor - k0)
+
+    return xCoor, yCoor, zCoor, tCoor, kxCoor, kyCoor, kzCoor, ExCoor, EyCoor, EzCoor
+
+
 # ----------------------------------------------------------------------------
 #               For telescope
 # ----------------------------------------------------------------------------
