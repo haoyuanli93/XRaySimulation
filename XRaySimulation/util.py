@@ -560,7 +560,7 @@ def get_k_mesh_1d(number, energy_range):
 
 def get_coordinate(nx, ny, nz, dx, dy, dz, k0=0):
     """
-    
+
     :param nx:
     :param ny:
     :param nz:

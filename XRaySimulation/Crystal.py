@@ -4,6 +4,8 @@ This module is used to create classes describing crystals
 fs, um are the units
 """
 
+import pickle
+
 import numpy as np
 import requests
 
@@ -31,6 +33,7 @@ class ChannelCut:
                  edge_length_list=np.array([5e4, 5e4]),
                  asymmetry_angle_list=np.deg2rad(np.array([0., 0.])),
                  first_surface_loc="lower left",
+                 source="x-server",
                  ):
         """
         Calculate the geometry
@@ -70,10 +73,18 @@ class ChannelCut:
         # The location of the first crystal determines which direction should the channel-cut rotate
         self.first_crystal_loc = first_surface_loc
 
-        # Get the atomic plane distance.
-        crystal_property = get_crystal_param(crystal_type=crystal_type,
-                                             miller_index=miller_index,
-                                             energy_kev=energy_keV)
+        if source == "x-server":
+            # Get the atomic plane distance.
+            crystal_property = get_crystal_param(crystal_type=crystal_type,
+                                                 miller_index=miller_index,
+                                                 energy_kev=energy_keV)
+            with open('./crystal_property_{}_{}_{:.2f}keV.pickle'.format(crystal_type,
+                                                                         miller_index,
+                                                                         energy_keV), 'wb') as handle:
+                pickle.dump(crystal_property, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(source, 'rb') as handle:
+                crystal_property = pickle.load(handle)
 
         # Get wave-length
         wave_length = 2 * np.pi / util.kev_to_wavevec_length(energy=energy_keV)
