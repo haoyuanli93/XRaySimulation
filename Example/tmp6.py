@@ -1,70 +1,76 @@
-##########################################################
-#
-# I create this file to help Arijit to read the ADU data
-#             2022-1-11
-##########################################################
-
-# Load psana. This is the most crucial module for operation
-import psana
-import tqdm
-
-# Load other modules for common operations.
-# Technically, these modules are not absolutely necessary.
-# you can replace them with others as long as they can plot and manipulate numpy arrays
 import numpy as np
-import matplotlib.pyplot as plt
 
-############################################
-#    Define objects to access the XTC file
-############################################
-exp_name = 'xpplw3319'  # The experiment name
-run_num = 325  # The run number you would like to analysis
-det_name = 'zyla_0'  # The detector name you would like to access
-
-pattern_num = 10  # Number of patterns to read
+k0 = 0
 
 
-"""
-If instead of the zyla or epix detector,
-you would like to know the incident pulse energy,
-then set
-det_name = XPP-SB2-BMMON
-"""
+# ------------------------------------
+# Get the rotation matrix
+# ------------------------------------
+kVec_for_rotmat = np.outer(np.ones(5), k0)
+kVec_for_rotmat[1, 1] += np.pi * 2 / (dy_new * ny_new)
+kVec_for_rotmat[2, 1] -= np.pi * 2 / (dy_new * ny_new)
+kVec_for_rotmat[3, 2] += np.pi * 2 / (dz_new * nz_new)
+kVec_for_rotmat[4, 2] -= np.pi * 2 / (dz_new * nz_new)
 
-# Create the DataSource object. This object is the gate to the XTC file
-ds = psana.DataSource("exp={}:run={}:smd".format(exp_name, run_num))
+# Get the output wave-vector from the devices
+output = []
+for kVec in range(5):
+    tmp = DeviceSimu.get_kout_multi_device(device_list=(yCrystals[0].crystal_list
+                                                        + myCrystals[1].crystal_list)
+    kin = k0Vec)
+    output.append(np.copy(tmp[-1]))
+kVec_for_rotmat = np.vstack((x for x in output))
 
-# Below is some variables needed for the data extraction.
-# I do not understand why it is designed in this way.
-runid = ds.runs().next()
-det = psana.Detector(det_name)
+# Get the output wave-vector
+u1 = (kVec_for_rotmat[2, :] - kVec_for_rotmat[1, :]) / 2.
+u2 = (kVec_for_rotmat[4, :] - kVec_for_rotmat[3, :]) / 2.
 
-# Get the time when each pattern is obtained
-seconds = []
-nanoseconds = []
-fiducials = []
-for nevt, evt in tqdm.tqdm(enumerate(ds.events())):
-    if nevt == pattern_num:
-        break
-    evtId = evt.get(psana.EventId)
-    seconds.append(evtId.time()[0])
-    nanoseconds.append(evtId.time()[1])
-    fiducials.append(evtId.fiducials())
+u_mat = np.zeros((2, 2))
+u_mat[0] = u1[1:]
+u_mat[1] = u2[1:]
+u_mat /= 2 * np.pi
+u_mat_inv = np.linalg.inv(u_mat)
 
-# Read the first image and get the detector image size
-et = psana.EventTime(int((seconds[0] << 32) | nanoseconds[0]), fiducials[0])
-evt = runid.event(et)
-img = det.calib(evt)  # This is the ADU value
+# --------------------------------------------
+#  Interpolation
+# --------------------------------------------
+# Define the grid size after the interpolation
+new_ny2 = ny_new
+new_nz2 = nz_new
 
-det_shape = img.shape
+# Define the position grid before the interpolation
+new_position_grid = np.zeros((new_ny2, new_nz2, 2))
+new_position_grid[:, :, 0] = np.arange(-new_ny2 // 2, new_ny2 // 2)[:, np.newaxis] * new_dy2
+new_position_grid[:, :, 1] = np.arange(-new_nz2 // 2, new_nz2 // 2)[np.newaxis, :] * new_dz2
+new_position_grid = np.reshape(new_position_grid, (new_ny2 * new_nz2, 2))
+new_position_grid = np.dot(u_mat, new_position_grid.T).T
 
-# Create a holder to save images
-image_holder = np.zeros((pattern_num,) + det_shape)
+# For each x interpolate the y-z plane
+for xIdx in range(nx_new):
 
-# Create the index for each pattern
-idx = 0
-for sec, nsec, fid in tqdm.tqdm(zip(seconds, nanoseconds, fiducials)):
-    et = psana.EventTime(int((sec << 32) | nsec), fid)
-    evt = runid.event(et)
-    image_holder[idx] = det.calib(evt)
-    idx += 1
+    # Load and assemble the eField before interpolation
+    eFieldYZslice = []
+    for yIdx in range(batchNumberY):
+        with h5.File("./output/batchIdx_{}_yIdx_{}.h5".format(pulseIdx, yBatchIdx), 'rb') as h5file:
+            eFieldYZslice.append(h5file['eFieldSlice'][xIdx, :, :])
+    eFieldYZslice = np.concatenate(eFieldYZslice, axis=0)
+
+    # Perform the interpolation
+    field_fit_mag = interpolate.interpn(points=(np.arange(-new_ny2 // 2, new_ny2 // 2) / new_ny2,
+                                                np.arange(-new_nz2 // 2, new_nz2 // 2) / new_nz2),
+                                        values=np.abs(field_z_holder[idx]),
+                                        xi=new_position_grid,
+                                        method='linear',
+                                        bounds_error=False,
+                                        fill_value=0.)
+
+    field_fit_phase = interpolate.interpn(points=(np.arange(-new_ny2 // 2, new_ny2 // 2) / new_ny2,
+                                                  np.arange(-new_nz2 // 2, new_nz2 // 2) / new_nz2),
+                                          values=unwrap_phase(np.angle(field_z_holder[idx])),
+                                          xi=new_position_grid,
+                                          method='linear',
+                                          bounds_error=False,
+                                          fill_value=0.)
+
+    field_fit[idx] = np.reshape(field_fit_mag * np.exp(1.j * field_fit_phase), (new_ny2, new_nz2))
+

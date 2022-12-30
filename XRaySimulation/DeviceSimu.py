@@ -1,4 +1,5 @@
 import numpy as np
+from numba import jit
 
 from XRaySimulation import util
 
@@ -481,7 +482,7 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
     if channelcut.first_crystal_loc == "lower left":
         rot_mat = util.rot_mat_in_yz_plane(theta=np.pi / 2. - geo_Bragg_angle)
     elif channelcut.first_crystal_loc == "upper left":
-        rot_mat = util.rot_mat_in_yz_plane(theta= - np.pi / 2. + geo_Bragg_angle)
+        rot_mat = util.rot_mat_in_yz_plane(theta=- np.pi / 2. + geo_Bragg_angle)
     else:
         print("The value of first_crystal_loc of the channel-cut can only be either lower left or uppper left."
               "Please check the value."
@@ -914,3 +915,81 @@ def get_device_list_for_simulation():
     """
     # TODO: May ask Selene to complete this.
     pass
+
+
+######################################################
+#    Get propagation in free space
+######################################################
+@jit(parallel=True)
+def add_propagate_phase(kx, ky, kz, distance, spectrum):
+    """
+
+    :param kx:
+    :param ky:
+    :param kz:
+    :param distance:
+    :param spectrum:
+    :return:
+    """
+    # get the wave-vector mesh
+    # kx = two_pi / dx * np.linspace(start=-0.5, stop=0.5, num=nx)
+    # ky = two_pi / dy * np.linspace(start=-0.5, stop=0.5, num=ny)
+    # kz = two_pi / dz * np.linspace(start=-0.5, stop=0.5, num=nz)
+
+    nx = kx.shape[0]
+    ny = ky.shape[0]
+    nz = kz.shape[0]
+
+    # Get time
+    t = distance / util.c
+
+    # Get frequency
+    omega = np.zeros((nx, ny, nz))
+    omega += np.square(kx[:, np.newaxis, np.newaxis])
+    omega += np.square(ky[np.newaxis, :, np.newaxis])
+    omega += np.square(kz[np.newaxis, np.newaxis, :])
+    omega = np.sqrt(omega) * util.c
+
+    # get phase, to save memory, I'll just use omega
+    omega *= t
+    omega -= kz[np.newaxis, np.newaxis, :] * distance
+
+    # Get the phase
+    np.multiply(spectrum,
+                np.exp(1.j * omega),
+                out=spectrum,
+                dtype=np.complex128)
+
+
+@jit(parallel=True)
+def add_lens_transmission_function(x, y, kz, fx, fy, xy_kz_field, n=complex(1.0, 0)):
+    """
+
+    :param x:
+    :param y:
+    :param kz:
+    :param fx:
+    :param fy:
+    :param xy_kz_field:
+    :param n:
+    :return:
+    """
+    phaseX = np.exp(complex(- n.imag / (1. - n.real), -1) * np.outer(np.square(x), kz / 2. / fx))
+    phaseY = np.exp(complex(- n.imag / (1. - n.real), -1) * np.outer(np.square(y), kz / 2. / fy))
+
+    # Add the transmission function to the electric field along each direction
+    np.multiply(xy_kz_field, phaseX[:, np.newaxis, :], out=xy_kz_field)
+    np.multiply(xy_kz_field, phaseY[np.newaxis, :, :], out=xy_kz_field)
+
+
+def get_flat_wavevector_array(kx, ky, kz):
+    nx = kx.shape[0]
+    ny = ky.shape[0]
+    nz = kz.shape[0]
+
+    kVecArray = np.zeros((nx, ny, nz, 3))
+    kVecArray[:, :, :, 0] = kx[:, np.newaxis, np.newaxis]
+    kVecArray[:, :, :, 1] = ky[np.newaxis, :, np.newaxis]
+    kVecArray[:, :, :, 2] = kz[np.newaxis, np.newaxis, :]
+
+    return np.reshape(kVecArray, (nx * ny * nz, 3))
