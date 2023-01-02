@@ -355,6 +355,65 @@ def getCoherenceFunctionXY_GPU_Method3(nSpatial,
             oldValueImag = float(newValueImag)
 
 
+@cuda.jit('void(int64, int64, int64,'
+          ' float64, float64, float64,'
+          ' float64, float64, float64,'
+          ' float64, float64, float64,' 
+          'float64[:,:,:], float64[:,:,:], float64[:])')
+def getCoherence_kSpace(numX, numY, numZ,
+                        qx, qy, qz,
+                        delta_kx, delta_ky, delta_kz,
+                        d, a, aSec,
+                        spectrumReal, spectrumImag, contrast):
+    zIdx1, zIdx2 = cuda.grid(2)
+
+    if (zIdx1 < numZ) & (zIdx2 < numZ):
+        # get eta
+        eta = float(zIdx2 - zIdx1) * delta_kz * (1 - qz)
+
+        # Get the pre factor
+        factor1 = (math.exp(- 2. * d * a) + math.exp(- 2. * d * aSec)
+                   - 2 * math.exp(- d * (a + aSec)) * math.cos(d * eta))
+        factor1 /= eta ** 2 + (aSec - a) ** 2
+
+        # Get the displacement of the wave-vector
+        deltaX = int(float(zIdx2 - zIdx1) * delta_kz * qx / delta_kx)
+        deltaY = int(float(zIdx2 - zIdx1) * delta_kz * qy / delta_ky)
+
+        if abs(deltaX) < numX:
+            if abs(deltaY) < numY:
+
+                # This displacement change the summation region of the spectrum
+                xStart = max(0, -deltaX)
+                xStop = min(numX, numX - deltaX)
+
+                yStart = max(0, -deltaY)
+                yStop = min(numX, numY - deltaY)
+
+                # holder spectrum
+                real_holder = 0
+                imag_holder = 0
+
+                # Loop through the kx, ky component of the electric field
+                for yIdx in range(yStart, yStop):
+                    for xIdx in range(xStart, xStop):
+                        real_holder += (spectrumReal[xIdx, yIdx, zIdx1]
+                                        * spectrumReal[xIdx + deltaX, yIdx + deltaY, zIdx2])
+                        real_holder += (spectrumImag[xIdx, yIdx, zIdx1]
+                                        * spectrumImag[xIdx + deltaX, yIdx + deltaY, zIdx2])
+
+                        imag_holder -= (spectrumImag[xIdx, yIdx, zIdx1]
+                                        * spectrumReal[xIdx + deltaX, yIdx + deltaY, zIdx2])
+                        imag_holder += (spectrumReal[xIdx, yIdx, zIdx1]
+                                        * spectrumImag[xIdx + deltaX, yIdx + deltaY, zIdx2])
+
+                cuda.atomic.add(contrast, 0, (real_holder ** 2 + imag_holder ** 2) * factor1)
+            else:
+                pass
+        else:
+            pass
+
+
 #########################################################################################
 #            Yanwen's example code
 #########################################################################################
