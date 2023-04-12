@@ -192,6 +192,37 @@ def get_bragg_kout_array(kin, crystal_h, normal):
     return kout
 
 
+def get_laue_kout_array(kin, crystal_h, normal):
+    """
+    This function produce the output wave vector from a laue reflection.
+
+    :param kin: (n, 3) numpy array. The incident wave vector
+    :param crystal_h: The reciprocal lattice of the crystal
+    :param normal: The normal direction of the reflection surface.
+                    For a bragg reflection, n is pointing to the inside of the crystal.
+
+    :return: kout: (n, 3) numpy array. The diffraction wave vector.
+    """
+
+    # kout holder
+    kout = kin + crystal_h[np.newaxis, :]
+
+    # Incident wave number
+    klen = np.sqrt(np.sum(np.square(kin), axis=-1))
+
+    # Get gamma and alpha
+    gammah = np.dot(kout, normal) / klen
+    alpha = (2 * np.dot(kin, crystal_h) + np.dot(crystal_h, crystal_h)) / np.square(klen)
+
+    # Get the momentum transfer
+    momentum = klen * (-gammah + np.sqrt(gammah ** 2 - alpha))
+
+    # Add momentum transfer
+    kout += np.outer(momentum, normal)
+
+    return kout
+
+
 def get_bragg_reflection_array(kin_grid, d, h, n,
                                chi0, chih_sigma, chihbar_sigma,
                                chih_pi, chihbar_pi):

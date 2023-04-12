@@ -920,7 +920,6 @@ def get_device_list_for_simulation():
 ######################################################
 #    Get propagation in free space
 ######################################################
-@jit(parallel=True)
 def add_propagate_phase(kx, ky, kz, distance, spectrum):
     """
 
@@ -961,7 +960,6 @@ def add_propagate_phase(kx, ky, kz, distance, spectrum):
                 dtype=np.complex128)
 
 
-@jit(parallel=True)
 def add_lens_transmission_function(x, y, kz, fx, fy, xy_kz_field, n=complex(1.0, 0)):
     """
 
