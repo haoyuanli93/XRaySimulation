@@ -165,7 +165,8 @@ class CrystalBlock3D:
                  surface_point=np.zeros(3, dtype=np.float64),
                  thickness=1e4,
                  chi_dict=None,
-                 edge_length=5e4):
+                 edge_length=5e4,
+                 ):
         """
 
         :param h:
@@ -212,6 +213,181 @@ class CrystalBlock3D:
         self.chihbar_pi = chi_dict["chih_pi"]
 
         self.chi_dict = chi_dict.copy()
+
+        #############################
+        # Second level of parameters. These parameters can be handy in the simulation_2019_11_5_2
+        #############################
+        self.dot_hn = np.dot(self.h, self.normal)
+        self.h_square = self.h[0] ** 2 + self.h[1] ** 2 + self.h[2] ** 2
+        self.h_len = np.sqrt(self.h_square)
+
+        #############################
+        # These parameters are designed for the light path simulation for the experiment
+        #############################
+        #      The boundary is defined in the following way
+        #
+        #    (top, left) point 0        (middle perpendicular to self.normal) self.surface_point      point 1
+        #      parallel to h
+        #       point 3                                                                               point 2
+        #
+
+        # direction perpendicular to the normal direction
+        direction1 = np.cross(np.array([1, 0, 0]), self.normal)
+        direction1 /= np.linalg.norm(direction1)
+
+        # direction parallel to the reciprocal lattice
+        direction2 = - self.h / np.linalg.norm(self.h)
+
+        point0 = self.surface_point - direction1 * edge_length / 2.
+        point1 = self.surface_point + direction1 * edge_length / 2.
+        point2 = point1 + thickness * direction2
+        point3 = point2 - direction1 * edge_length
+        point4 = np.copy(point0)
+
+        # Assemble
+        self.boundary = np.vstack([point0, point1, point2, point3, point4])
+
+    def set_h(self, reciprocal_lattice):
+        self.h = np.array(reciprocal_lattice)
+        self._update_dot_nh()
+        self._update_h_square()
+
+    def set_surface_normal(self, normal):
+        """
+        Define the normal direction of the incident surface. Notice that, this algorithm assumes that
+        the normal vector points towards the interior of the crystal.
+
+        :param normal:
+        :return:
+        """
+        self.normal = normal
+        self._update_dot_nh()
+
+    def set_surface_point(self, surface_point):
+        """
+
+        :param surface_point:
+        :return:
+        """
+        self.surface_point = surface_point
+
+    def set_thickness(self, d):
+        """
+        Set the lattice thickness
+        :param d:
+        :return:
+        """
+        self.thickness = d
+
+    def _update_dot_nh(self):
+        self.dot_hn = np.dot(self.normal, self.h)
+
+    def _update_h_square(self):
+        self.h_square = self.h[0] ** 2 + self.h[1] ** 2 + self.h[2] ** 2
+        self.h_len = np.sqrt(self.h_square)
+
+    def shift(self, displacement, include_boundary=True):
+        """
+
+        :param displacement:
+        :param include_boundary: Whether to shift the boundary or not.
+        :return:
+        """
+        self.surface_point += displacement
+
+        if include_boundary:
+            self.boundary += displacement[np.newaxis, :]
+
+    def rotate(self, rot_mat, include_boundary=True):
+        # The shift of the space does not change the reciprocal lattice and the normal direction
+        self.h = np.ascontiguousarray(rot_mat.dot(self.h))
+        self.normal = np.ascontiguousarray(rot_mat.dot(self.normal))
+        self.surface_point = np.asanyarray(np.dot(rot_mat, self.surface_point))
+
+        if include_boundary:
+            self.boundary = np.asanyarray(np.dot(self.boundary, rot_mat.T))
+
+    ##############################################
+    #   This is a methods designed for the simulation of the light path
+    #   to investigate whether the crystal will block hte light or not.
+    ##############################################
+    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=True):
+        """
+        This is a function designed
+        :param rot_mat:
+        :param ref_point:
+        :param include_boundary:
+        :return:
+        """
+        tmp = np.copy(ref_point)
+        # Step 1: shift with respect to that point
+        self.shift(displacement=-np.copy(tmp), include_boundary=include_boundary)
+
+        # Step 2: rotate the quantities
+        self.rotate(rot_mat=rot_mat, include_boundary=include_boundary)
+
+        # Step 3: shift it back to the reference point
+        self.shift(displacement=np.copy(tmp), include_boundary=include_boundary)
+
+
+class CrystalBlock3D_auto:
+    def __init__(self,
+                 crystal_type="Silicon",
+                 miller_index="220",
+                 energy_keV=10.0,
+                 thickness=1e4,
+                 edge_length=5e4,
+                 asymmetry_angle=0.0,
+                 source="x-server",
+                 ):
+        """
+
+        :param crystal_type:
+        :param miller_index:
+        :param energy_keV:
+        :param thickness:
+        :param edge_length:
+        :param asymmetry_angle:
+        :param source:
+        """
+        # Add a type to help functions to choose how to treat this object
+        self.type = "Crystal: Bragg Reflection"
+
+        if source == "x-server":
+            # Get the atomic plane distance.
+            crystal_property = get_crystal_param(crystal_type=crystal_type,
+                                                 miller_index=miller_index,
+                                                 energy_kev=energy_keV)
+            with open('./crystal_property_{}_{}_{:.2f}keV.pickle'.format(crystal_type,
+                                                                         miller_index,
+                                                                         energy_keV), 'wb') as handle:
+                pickle.dump(crystal_property, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(source, 'rb') as handle:
+                crystal_property = pickle.load(handle)
+
+        # Reciprocal lattice in um^-1
+        self.h = np.copy(np.array([0., 2. * np.pi / crystal_property['d'], 0.]))
+        self.normal = np.array([0., -np.cos(asymmetry_angle), np.sin(asymmetry_angle)])
+        self.surface_point = np.zeros(3, dtype=np.float64)
+        self.thickness = thickness
+
+        # zero component of electric susceptibility's fourier transform
+        self.chi0 = crystal_property["chi0"]
+
+        # h component of electric susceptibility's fourier transform
+        self.chih_sigma = crystal_property["chih_sigma"]
+
+        # hbar component of electric susceptibility's fourier transform
+        self.chihbar_sigma = crystal_property["chih_sigma"]
+
+        # h component of electric susceptibility's fourier transform
+        self.chih_pi = crystal_property["chih_pi"]
+
+        # hbar component of electric susceptibility's fourier transform
+        self.chihbar_pi = crystal_property["chih_pi"]
+
+        self.chi_dict = crystal_property.copy()
 
         #############################
         # Second level of parameters. These parameters can be handy in the simulation_2019_11_5_2
