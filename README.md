@@ -1,3 +1,14 @@
+# Warning:
+My x-y-z coordinate convention is different from the SLAC convention!
+
+In my simulation, the z axis is the beam propagation direction.
+
+The y axis is the horizontal transverse direction.
+This the the x axis in SLAC convension.
+
+The x axis is the vertical transverse direction.
+This is the y axis in SLAC convension.
+
 # XRaySimulation
 This is my new simulation repo.
 

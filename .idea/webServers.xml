@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="a38f76cd-af11-4818-a2bf-b11bcdf1e003" name="sdf">
+        <fileTransfer rootFolder="/sdf/home/h/haoyuan" accessType="SFTP" host="sdf.slac.stanford.edu" port="22" sshConfigId="3d2deed2-7e91-4d89-82d7-c25a6032e55f" sshConfig="haoyuan@sdf.slac.stanford.edu:22 password">
+          <advancedOptions>
+            <advancedOptions controlEncoding="utf-8" dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" isUseRsync="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
