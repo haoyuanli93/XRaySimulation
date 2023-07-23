@@ -113,6 +113,50 @@ def rot_mat_in_yz_plane(theta):
     return rotmat
 
 
+def get_rotmat_around_axis(angleRadian, axis):
+    """
+    Get a rotation matrix that rotate a vector
+    with respect to an axis by some angle in radian.
+
+    According to the right hand rule,
+    if one aligns the thumb with the positive direction of the axis,
+    then a positive angle is direction of your four fingers with
+    a hollow fist.
+
+    :param angleRadian:
+    :param axis:
+    :return:
+    """
+
+    # Check the axis length and normalize it
+    if np.linalg.norm(axis) < 1e-6:
+        print("The axis has to be a vector of unit length.")
+        return False
+    axis /= np.linalg.norm(axis)
+
+    # Step 1: get a vector that is not parallel with the axis
+    newAxis = np.zeros(3, dtype=np.float64)
+    newAxis[0] = 1.0
+
+    if np.linalg.norm(newAxis - axis)  < 1e-12:
+        # If this relative is valid, then axis[0] ~ 1 while  axis[1] = axis[2] = 0
+        newAxis[0] = 0.0
+        newAxis[1] = 1.0
+
+    # Step 2: remove the projection of the newAxis on the axis direction
+    newAxis -= axis * np.dot(axis, newAxis)
+    newAxis /= np.linalg.norm(newAxis)
+
+    # Step 2: get the other vector though cross project
+    newAxis2 = np.cross(axis, newAxis)
+
+    # Construct the matrix
+    rotMat = np.zeros((3,3))
+    rotMat += np.outer(axis, axis) + np.cos(angleRadian) * (np.outer(newAxis, newAxis) + np.outer(newAxis2, newAxis2))
+    rotMat += np.sin(angleRadian) * (np.outer(newAxis2, newAxis) - np.outer(newAxis, newAxis2))
+
+    return rotMat
+
 # --------------------------------------------------------------
 #          For Bragg Reflection
 # --------------------------------------------------------------
