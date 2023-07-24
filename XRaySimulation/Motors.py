@@ -78,8 +78,8 @@ class LinearMotor:
         self.dp_boundary = np.array([np.array([0, -2e4, -5e4]),
                                      np.array([0, -2e4, 5e4]),
                                      np.array([0, 2e4, 5e4]),
-                                     np.array([0, 2e0, -5e4]),
-                                     np.array([0, -2e40, -5e4]),
+                                     np.array([0, 2e4, -5e4]),
+                                     np.array([0, -2e4, -5e4]),
                                      ])
 
     def shift(self, displacement, include_boundary=True):
@@ -233,8 +233,8 @@ class RotationMotor:
         self.dp_boundary = np.array([np.array([0, -5e4, -5e4]),
                                      np.array([0, -5e4, 5e4]),
                                      np.array([0, 5e4, 5e4]),
-                                     np.array([0, 5e0, -5e4]),
-                                     np.array([0, -5e40, -5e4]),
+                                     np.array([0, 5e4, -5e4]),
+                                     np.array([0, -5e4, -5e4]),
                                      ])
 
     def shift(self, displacement, include_boundary=True):
@@ -342,6 +342,7 @@ class CrystalTower_1236:
     def __init__(self,
                  channelCut):
         # Create the instance of each motors
+
         self.x = LinearMotor(upperLim=12.5 * 1000,
                              lowerLim=-12.5 * 1000,
                              res=5,
@@ -410,9 +411,15 @@ class CrystalTower_1236:
         chi_stage_center = np.zeros(3, dtype=np.float64)
         chi_stage_center[0] = 30 * 1000 + 20 * 1000 + 30e3  # The height of the x stage + the height of the y stage
         # + the height of the theta stage
-        self.th.shift(displacement=chi_stage_center)
+        self.chi.shift(displacement=chi_stage_center)
 
         # Move the crystal such that the
+        crystalSurface = np.zeros(3, dtype=np.float64)
+        crystalSurface[0] = 30 * 1000 + 20 * 1000 + 30e3 + 20e3
+        self.optics.shift(displacement=crystalSurface)
+
+        # Define the color for the device visualization
+        self.color_list = ['red', 'brown', 'yellow', 'purple', 'black']
 
     def x_umv(self, target):
         """
@@ -433,8 +440,6 @@ class CrystalTower_1236:
         self.th.shift(displacement=displacement, include_boundary=True)
         self.chi.shift(displacement=displacement, include_boundary=True)
         self.optics.shift(displacement=displacement, include_boundary=True)
-
-        self.colors = ['k', 'brown', 'yellow', 'purple', 'red']
 
     def y_umv(self, target):
         # Get the displacement vector for the motion
@@ -472,13 +477,13 @@ class CrystalTower_1236:
     def plot_motors(self, ax):
         # Plot motors and crystals one by one
         ax.plot(self.x.dp_boundary[:, 2], self.x.dp_boundary[:, 1],
-                linestyle='--', linewidth=1, label="x", color=self.colors[0])
+                linestyle='--', linewidth=1, label="x", color=self.color_list[0])
         ax.plot(self.y.dp_boundary[:, 2], self.y.dp_boundary[:, 1],
-                linestyle='--', linewidth=1, label="y", color=self.colors[1])
+                linestyle='--', linewidth=1, label="y", color=self.color_list[1])
         ax.plot(self.th.dp_boundary[:, 2], self.th.dp_boundary[:, 1],
-                linestyle='--', linewidth=1, label="th", color=self.colors[2])
+                linestyle='--', linewidth=1, label="th", color=self.color_list[2])
         ax.plot(self.chi.dp_boundary[:, 2], self.chi.dp_boundary[:, 1],
-                linestyle='--', linewidth=1, label="chi", color=self.colors[3])
-        for crystal in self.optics:
-            ax.plot(crystal.dp_boundary[:, 2], self.optics.dp_boundary[:, 1],
-                    linestyle='-', linewidth=3, label="crystal", color=self.colors[4])
+                linestyle='--', linewidth=1, label="chi", color=self.color_list[3])
+        for crystal in self.optics.crystal_list:
+            ax.plot(crystal.boundary[:, 2], crystal.boundary[:, 1],
+                    linestyle='-', linewidth=3, label="crystal", color=self.color_list[4])
