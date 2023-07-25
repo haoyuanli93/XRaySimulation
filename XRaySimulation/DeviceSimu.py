@@ -198,6 +198,37 @@ def get_bragg_reflectivity_per_entry(kin, thickness, crystal_h, normal, chi_dict
     return reflect_sigma, reflect_pi, b_factor, kout
 
 
+def get_reflectivity_channel_cut(kin_array,
+                                 channelCut):
+    """
+
+    :param kin_array:
+    :param channelCut:
+    :return:
+    """
+    (reflect_sigma1,
+     reflect_pi1,
+     b_factor1,
+     kout1) = get_bragg_reflectivity_fix_crystal(kin=kin_array,
+                                                 thickness=channelCut.crystal_list[0].thickness,
+                                                 crystal_h=channelCut.crystal_list[0].h,
+                                                 normal=channelCut.crystal_list[0].normal,
+                                                 chi_dict=channelCut.crystal_list[0].chi_dict, )
+    (reflect_sigma2,
+     reflect_pi2,
+     b_factor2,
+     kout2) = get_bragg_reflectivity_fix_crystal(kin=kin_array,
+                                                 thickness=channelCut.crystal_list[0].thickness,
+                                                 crystal_h=channelCut.crystal_list[0].h,
+                                                 normal=channelCut.crystal_list[0].normal,
+                                                 chi_dict=channelCut.crystal_list[0].chi_dict, )
+
+    return (reflect_sigma1 * reflect_sigma2,
+            reflect_pi1 * reflect_pi2,
+            b_factor1 * b_factor2,
+            kout2)
+
+
 def get_bragg_rocking_curve(kin,
                             scan_range,
                             scan_number,
@@ -543,16 +574,18 @@ def get_channel_cut_auto_align_rotMat(channelcut,
     :param get_curve:
     :return:
     """
+    if not (rot_center):
+        rot_center = channelcut.crystal_list[0].surface_point
 
     # Get the rotated kin
     geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
                                            plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
 
     # Depending on the geometry of the channel-cut crystal, the rotation angle of the kin is different
-    if channelcut.first_crystal_loc == "lower left":
+    if channelcut.first_crystal_loc == "upper left":
         rotMat1 = util.get_rotmat_around_axis(angleRadian=geo_Bragg_angle + np.pi / 2,
                                               axis=rotationAxis)
-    elif channelcut.first_crystal_loc == "upper left":
+    elif channelcut.first_crystal_loc == "lower left":
         rotMat1 = util.get_rotmat_around_axis(angleRadian=-geo_Bragg_angle - np.pi / 2,
                                               axis=rotationAxis)
     else:
@@ -585,7 +618,7 @@ def get_channel_cut_auto_align_rotMat(channelcut,
     rotMat2 = util.get_rotmat_around_axis(angleRadian=rot_angle,
                                           axis=rotationAxis)
     h1 = np.dot(rotMat2, channelcut.crystal_list[0].h)
-    n1 = np.dot(rotMat2, channelcut.crystal_list[0].n)
+    n1 = np.dot(rotMat2, channelcut.crystal_list[0].normal)
 
     kout_test = kin + h1
     if (np.abs(np.linalg.norm(kout_test) - np.linalg.norm(kin)) / np.linalg.norm(kin) > 1e-6) or (
@@ -632,7 +665,7 @@ def get_channel_cut_auto_align_rotMat(channelcut,
                                 ref_point=np.copy(rot_center))
 
     if get_curve:
-        return np.matmul(rotMat3, rotMat2), angles, rocking_curve, b_array
+        return np.matmul(rotMat3, rotMat2), angle_adjust + rot_angle, angles, rocking_curve, b_array
     else:
         return np.matmul(rotMat3, rotMat2)
 

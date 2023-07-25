@@ -13,13 +13,13 @@ def get_intensity_with_spectrum_and_reflectivity(spectrum_array, dk_keV, reflect
     :param relative_noise_level:
     :return:
     """
-    randomSeed = int(time.time() * 1e6)
+    randomSeed = int(time.time() * 1e6) % 65536
     np.random.seed(randomSeed)
 
     pulseEnergy = np.sum(np.square(np.abs(np.multiply(spectrum_array, reflectivity[np.newaxis, :]))), axis=-1)
     pulseEnergy *= dk_keV
 
-    pulseEnergyReadOut = np.random.random(spectrum_array.shape[0]) + relative_noise_level
+    pulseEnergyReadOut = np.random.rand(spectrum_array.shape[0]) + relative_noise_level
     pulseEnergyReadOut *= pulseEnergy
 
     return pulseEnergyReadOut, pulseEnergy

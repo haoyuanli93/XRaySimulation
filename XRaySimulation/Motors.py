@@ -357,18 +357,18 @@ class CrystalTower_1236:
                              feedback_noise_level=1,
                              speed_um_per_ps=1 * 1000 / 1e12, )
 
-        self.th = RotationMotor(upperLim=np.deg2rad(45),
-                                lowerLim=-np.deg2rad(45),
-                                res=2e-6,
-                                backlash=0.05,
-                                feedback_noise_level=1,
+        self.th = RotationMotor(upperLim=np.deg2rad(360),
+                                lowerLim=-np.deg2rad(360),
+                                res=1e-6,
+                                backlash=np.deg2rad(-0.005),
+                                feedback_noise_level=1e-9,
                                 speed_rad_per_ps=0.01 / 1e12, )
 
         self.chi = RotationMotor(upperLim=np.deg2rad(5),
                                  lowerLim=-np.deg2rad(5),
                                  res=1e-6,
-                                 backlash=0.05,
-                                 feedback_noise_level=1,
+                                 backlash=np.deg2rad(-0.005),
+                                 feedback_noise_level=1e-9,
                                  speed_rad_per_ps=0.1 / 1e12, )
 
         self.optics = channelCut
