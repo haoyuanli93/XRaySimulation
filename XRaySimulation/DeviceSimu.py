@@ -475,7 +475,6 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
     # Rotate according to the geometric Bragg angle
     geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
                                            plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
-
     print("The geometric Bragg angle is {:.2f} deg".format(np.rad2deg(geo_Bragg_angle)))
 
     # Rotate the channel-cut according to the geometry of the channel-cut crystal
@@ -520,6 +519,122 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
                                 ref_point=np.copy(rot_center))
     if get_curve:
         return angles, rocking_curve, b_array
+
+
+def get_channel_cut_auto_align_rotMat(channelcut,
+                                      kin,
+                                      rotationAxis,
+                                      scan_range=0.0005,
+                                      scan_number=10000,
+                                      rot_center=None,
+                                      get_curve=False):
+    """
+    Align the crystal such that the incident wave vector is at the center of the
+    reflectivity curve
+
+    Assumption: The rotation axis is normal to the diffraction plane
+    Assumption: Bragg reflection
+
+    :param channelcut:
+    :param kin:
+    :param scan_range:
+    :param scan_number:
+    :param rot_center:
+    :param get_curve:
+    :return:
+    """
+
+    # Get the rotated kin
+    geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
+                                           plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
+
+    # Depending on the geometry of the channel-cut crystal, the rotation angle of the kin is different
+    if channelcut.first_crystal_loc == "lower left":
+        rotMat1 = util.get_rotmat_around_axis(angleRadian=geo_Bragg_angle + np.pi / 2,
+                                              axis=rotationAxis)
+    elif channelcut.first_crystal_loc == "upper left":
+        rotMat1 = util.get_rotmat_around_axis(angleRadian=-geo_Bragg_angle - np.pi / 2,
+                                              axis=rotationAxis)
+    else:
+        print("The value of first_crystal_loc of the channel-cut can only be either lower left or uppper left."
+              "Please check the value."
+              "No rotation is implemented.")
+        return 0
+
+    kin_rot = np.dot(rotMat1, kin)
+    kin_rot /= np.linalg.norm(kin_rot)
+
+    # Get the angle between current h and rotated kin
+    h_dir = channelcut.crystal_list[0].h / np.linalg.norm(channelcut.crystal_list[0].h)
+    rot_dir = np.cross(h_dir, kin_rot)
+    # sin_ang = np.linalg.norm(rot_dir)
+    cos_ang = np.dot(h_dir, kin_rot)
+    if np.abs(np.abs(cos_ang) - 1) < 1e-6:
+        rot_angle = np.pi
+    else:  # These two are not parallel to each other
+        # We can determine the angle from the arccos
+        rot_angle = np.arccos(cos_ang)
+        # We can determine whether it is clockwise or counter-clockwise
+        rot_dir /= np.linalg.norm(rot_dir)
+
+        # Add the rotation direction
+        if np.dot(rot_dir, rotationAxis) < 0:
+            rot_angle *= -1
+
+    # Check if it satisfies the Bragg condition
+    rotMat2 = util.get_rotmat_around_axis(angleRadian=rot_angle,
+                                          axis=rotationAxis)
+    h1 = np.dot(rotMat2, channelcut.crystal_list[0].h)
+    n1 = np.dot(rotMat2, channelcut.crystal_list[0].n)
+
+    kout_test = kin + h1
+    if (np.abs(np.linalg.norm(kout_test) - np.linalg.norm(kin)) / np.linalg.norm(kin) > 1e-6) or (
+            np.dot(kout_test, n1) > 0):
+        print("Error! The aligned result either does not meet the Bragg condition or is a Laue diffraction.")
+        print(h1, n1)
+        return 0
+
+    # Rotate the channel-cut in this condition
+    # TODO: I have tried not to do this, however, I failed.
+    # TODO: In the future, I would like to have a function that do not rotate the crystal.
+
+    channelcut.rotate_wrt_point(rot_mat=rotMat2,
+                                ref_point=np.copy(rot_center),
+                                include_boundary=True)
+
+    # ------------------------------------------------------
+    # Refine the alignment with dynamical diffraction theory.
+    # ------------------------------------------------------
+    # Align the crystal with dynamical diffraction theory
+    (angles,
+     reflect_s,
+     reflect_p,
+     b_array,
+     kout_grid) = get_bragg_rocking_curve_channelcut(kin=kin,
+                                                     channelcut=channelcut,
+                                                     scan_range=scan_range,
+                                                     scan_number=scan_number,
+                                                     )
+
+    rocking_curve = np.square(np.abs(reflect_s)) / np.abs(b_array)
+
+    # Third: find bandwidth of the rocking curve and the center of the rocking curve
+    fwhm, angle_adjust = util.get_fwhm(coordinate=angles,
+                                       curve_values=rocking_curve,
+                                       center=True)
+
+    # Fourth: Align the crystal along that direction.
+    rotMat3 = util.get_rotmat_around_axis(angleRadian=angle_adjust, axis=rotationAxis)
+
+    # TODO: In the future, I would like to have a function that do not rotate the crystal.
+    # TODO: In that case, I would not need to rotate the crystal back.
+    channelcut.rotate_wrt_point(rot_mat=np.transpose(rotMat2),
+                                ref_point=np.copy(rot_center))
+
+    if get_curve:
+        return np.matmul(rotMat3, rotMat2), angles, rocking_curve, b_array
+    else:
+        return np.matmul(rotMat3, rotMat2)
 
 
 def align_grating_normal_direction(grating, axis):
