@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 from XRaySimulation import util
 
@@ -242,3 +243,49 @@ def getGaussianModeSum(nx, ny, nz,
     eField *= np.exp(-1.j * np.arange(nz) * dz * k0)[np.newaxis, np.newaxis, :]
 
     return eField
+
+
+# ---------------------------------------------
+#    For the data science project
+# ---------------------------------------------
+def get_1D_GaussianPulse_array(pulseNum=120,
+                               nk=300,
+                               dk_keV=1e-5,
+                               nGaussian=10,
+                               modeSize_keV=0.1e-3,
+                               modeCenterSpread_keV=0.5e-3,
+                               pulseEnergyCenter_uJ=3,
+                               pulseEnergySigma_uJ=1,  # Follow a logNormal Distribution
+                               ):
+    # Get a random seed based on current time
+    randomSeed = int(time.time() * 1e6)
+    np.random.seed(randomSeed)
+
+    # Get the pulse spectrum holder
+    spectrumHolder = np.zeros((pulseNum, nk), dtype=np.complex128)
+
+    # Get Randomly generate some Gaussian function centers
+    centers = (np.random.rand(pulseNum, nGaussian) - 0.5) * modeCenterSpread_keV / dk_keV
+    widths = (np.random.rand(pulseNum, nGaussian) + 1e-6) * modeSize_keV * 2
+    magnitude = (np.random.rand(pulseNum, nGaussian) + 1e-2) / np.sqrt(widths * dk_keV)
+    phase = np.exp(1.j * (np.random.rand(pulseNum, nGaussian) * np.pi * 2))
+
+    k_array_keV = np.arange(-nk // 2, nk - nk // 2) * dk_keV
+
+    # Loop through the mode number to get the pulse
+    for modeIdx in range(nGaussian):
+        tmp = - np.square(k_array_keV[np.newaxis, :] - centers[:, np.newaxis]) / 2
+        tmp /= np.square(widths[:, np.newaxis])
+        tmp = np.exp(tmp)
+        spectrumHolder[:, :] += (magnitude[:, modeIdx] * phase[:, modeIdx])[:, np.newaxis] * tmp
+
+    pulseEnergy = np.random.lognormal(mean=pulseEnergyCenter_uJ, sigma=pulseEnergySigma_uJ, size=pulseNum)
+    energy_normalization = np.sqrt(np.sum(np.square(np.abs(spectrumHolder)), axis=-1) * dk_keV)
+    energy_normalization = (np.sqrt(pulseEnergy) / energy_normalization).astype(np.complex128)
+
+    spectrumHolder = spectrumHolder * energy_normalization[:, np.newaxis]
+
+    k_vec = np.zeros((pulseNum, 3))
+    k_vec[:, 2] = util.kev_to_wavevec_length(k_array_keV)
+
+    return spectrumHolder, pulseEnergy, k_array_keV, k_vec
