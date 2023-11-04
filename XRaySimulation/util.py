@@ -138,7 +138,7 @@ def get_rotmat_around_axis(angleRadian, axis):
     newAxis = np.zeros(3, dtype=np.float64)
     newAxis[0] = 1.0
 
-    if np.linalg.norm(newAxis - axis)  < 1e-12:
+    if np.linalg.norm(newAxis - axis) < 1e-12:
         # If this relative is valid, then axis[0] ~ 1 while  axis[1] = axis[2] = 0
         newAxis[0] = 0.0
         newAxis[1] = 1.0
@@ -151,11 +151,12 @@ def get_rotmat_around_axis(angleRadian, axis):
     newAxis2 = np.cross(axis, newAxis)
 
     # Construct the matrix
-    rotMat = np.zeros((3,3))
+    rotMat = np.zeros((3, 3))
     rotMat += np.outer(axis, axis) + np.cos(angleRadian) * (np.outer(newAxis, newAxis) + np.outer(newAxis2, newAxis2))
     rotMat += np.sin(angleRadian) * (np.outer(newAxis2, newAxis) - np.outer(newAxis, newAxis2))
 
     return rotMat
+
 
 # --------------------------------------------------------------
 #          For Bragg Reflection
@@ -270,6 +271,297 @@ def get_laue_kout_array(kin, crystal_h, normal):
 def get_bragg_reflection_array(kin_grid, d, h, n,
                                chi0, chih_sigma, chihbar_sigma,
                                chih_pi, chihbar_pi):
+    """
+    This function aims to get the info quickly with cpu.
+
+    :param kin_grid:
+    :param d:
+    :param h:
+    :param n:
+    :param chi0:
+    :param chih_sigma:
+    :param chihbar_sigma:
+    :param chih_pi:
+    :param chihbar_pi:
+    :return:
+    """
+    # Create holder to save the reflectivity and output momentum
+    kout_grid = np.zeros_like(kin_grid, dtype=np.float64)
+
+    # ------------------------------------------------------------
+    #          Step 1: Get output momentum wave vector
+    # ------------------------------------------------------------
+    # Get some info to facilitate the calculation
+    klen_grid = np.linalg.norm(kin_grid, axis=-1)
+    dot_hn = np.dot(h, n)
+    h_square = np.sum(np.square(h))
+
+    # Get gamma and alpha and b
+    dot_kn = np.dot(kin_grid, n)
+    dot_kh = np.dot(kin_grid, h)
+
+    gamma_0 = np.divide(dot_kn, klen_grid)
+    gamma_h = np.divide(dot_kn + dot_hn, klen_grid)
+    # print(gamma_h)
+
+    b = np.divide(gamma_0, gamma_h)
+    b_cplx = b.astype(np.complex128)
+    alpha = np.divide(2 * dot_kh + h_square, np.square(klen_grid))
+
+    # Get momentum tranfer
+    sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha)
+
+    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
+    # mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
+
+    m_trans = np.multiply(klen_grid, -gamma_h - sqrt_gamma_alpha)
+    # m_trans[mask] = np.multiply(klen_grid[mask], -gamma_h[mask] + sqrt_gamma_alpha[mask])
+
+    # Update the kout_grid
+    kout_grid[:, 0] = kin_grid[:, 0] + h[0] + m_trans * n[0]
+    kout_grid[:, 1] = kin_grid[:, 1] + h[1] + m_trans * n[1]
+    kout_grid[:, 2] = kin_grid[:, 2] + h[2] + m_trans * n[2]
+
+    # ------------------------------------------------------------
+    # Step 2: Get the reflectivity for input sigma polarization
+    # ------------------------------------------------------------
+    # Get alpha tidle
+    alpha_tidle = (alpha * b + chi0 * (1. - b)) / 2.
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + np.multiply(b_cplx, chih_sigma * chihbar_sigma))
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen_grid * d / gamma_0 * sqrt_a2_b2.real
+    im = klen_grid * d / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 100] = True
+
+    reflect_s = chih_sigma * b_cplx / denominator
+    # reflect_s[mask] = chih_sigma * b_cplx[mask] * numerator[mask] / denominator[mask]
+
+    # ------------------------------------------------------------
+    # Step 2: Get the reflectivity for pi polarization
+    # ------------------------------------------------------------
+
+    # Get the polarization factor with the asymmetric factor b.
+    p_value = complex(1.)  # np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
+    bp = b_cplx * p_value
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen_grid * d / gamma_0 * sqrt_a2_b2.real
+    im = klen_grid * d / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 400] = True
+
+    reflect_p = bp * chih_pi / denominator
+    # reflect_p[mask] = bp[mask] * chih_pi * numerator[mask] / denominator[mask]
+
+    return reflect_s, reflect_p, b, kout_grid
+
+
+def _bragg_r1r2_kappa1d_kapp2d(lambdaH, scriptG, chi0, b, alpha, gamma0, klen, d):
+    """
+    Abbreviations for some calculation of the
+    reflectivity
+
+    Notice that, for numerical stability, we are here forcing
+    the imaginary part of kappa1 * d to be positive so that the
+    phase term in the exponential does not explode
+
+    :param lambdaH:
+    :param scriptG:
+    :param chi0:
+    :param b:
+    :param d:
+    :param alpha:
+    :param gamma0:
+    :param klen:
+    :return:
+    """
+    y = klen * lambdaH / 2 / gamma0
+    y *= (b * alpha + chi0 * (1 - b))
+
+    # Get kappa1 * d and kappa2 * d
+    kappa1d = chi0 * klen * d / 2 / gamma0
+    kappa1d += d / lambdaH * (-y + np.sqrt(y ** 2 + b / np.abs(b)))
+
+    kappa2d = chi0 * klen * d / 2 / gamma0
+    kappa2d -= d / lambdaH * (-y + np.sqrt(y ** 2 + b / np.abs(b)))
+
+    # Get the R1 and R2 defined in the note
+    r1, r2 = (scriptG * (-y + np.sqrt(y ** 2 + b / np.abs(b))),
+              scriptG * (-y - np.sqrt(y ** 2 + b / np.abs(b))),)
+
+    # Get the positiveness of the imaginary part of kappa1 * d
+    mask = np.zeros_like(kappa1d, dtype=bool)
+    mask[kappa1d.imag < 0] = True
+
+    # Get a tmp array
+    tmp = np.copy(kappa1d)
+    kappa1d[mask] = kappa2d[mask]
+    kappa2d[mask] = tmp[mask]
+
+    tmp = np.copy(r1)
+    r1[mask] = r2[mask]
+    r2[mask] = tmp[mask]
+
+    return r1, r2, kappa1d, kappa2d
+
+
+def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
+                          chi0, chih_sigma, chihbar_sigma,
+                          chih_pi, chihbar_pi):
+    """
+    The derivation follows that from Yuri's paper:
+
+
+    :param kin_grid:
+    :param d:
+    :param h:
+    :param n:
+    :param chi0:
+    :param chih_sigma:
+    :param chihbar_sigma:
+    :param chih_pi:
+    :param chihbar_pi:
+    :return:
+    """
+
+    # -----------------------------------------
+    # Get the Output wave-vector
+    # -----------------------------------------
+    # Create holder to save the reflectivity and output momentum
+    klen_grid = np.linalg.norm(kin_grid, axis=-1)
+
+    gamma_0 = np.divide(np.dot(kin_grid, n), klen_grid)
+    gamma_h = np.divide(np.dot(kin_grid + h[np.newaxis, :], n), klen_grid)
+
+    b = np.divide(gamma_0, gamma_h)
+    b_cplx = b.astype(np.complex128)
+    alpha = np.divide(2 * np.dot(kin_grid, h) + np.linalg.norm(h) ** 2, np.square(klen_grid))
+
+    # Get the surface momentum transfer from phase matching condition
+    sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha)
+    m_trans = np.multiply(klen_grid, -gamma_h - sqrt_gamma_alpha)
+
+    # Get the output wave-vector
+    kout_grid = kin_grid + h[np.newaxis, :] + m_trans[:, np.newaxis] * n[np.newaxis, :]
+
+    # ------------------------------------------------------------
+    # Get the parameters for the reflectivity
+    # ------------------------------------------------------------
+    lambdaH_sigma = np.sqrt(gamma_0 * np.abs(gamma_h) / chih_sigma / chihbar_sigma) / klen_grid
+    lambdaH_pi = np.sqrt(gamma_0 * np.abs(gamma_h) / chih_pi / chihbar_pi) / klen_grid
+    scriptG_sigma = np.sqrt(np.abs(b)) * np.sqrt(chih_sigma * chihbar_sigma) / chihbar_sigma
+    scriptG_pi = np.sqrt(np.abs(b)) * np.sqrt(chih_pi * chihbar_pi) / chihbar_pi
+
+    # ------------------------------------------------------------
+    # Get the reflectivity for the sigma polarization
+    # ------------------------------------------------------------
+
+
+
+    # Get alpha tidle
+    alpha_tidle = (alpha * b + chi0 * (1. - b)) / 2.
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + np.multiply(b_cplx, chih_sigma * chihbar_sigma))
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen_grid * d / gamma_0 * sqrt_a2_b2.real
+    im = klen_grid * d / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 100] = True
+
+    reflect_s = chih_sigma * b_cplx / denominator
+    # reflect_s[mask] = chih_sigma * b_cplx[mask] * numerator[mask] / denominator[mask]
+
+    # ------------------------------------------------------------
+    # Step 2: Get the reflectivity for pi polarization
+    # ------------------------------------------------------------
+
+    # Get the polarization factor with the asymmetric factor b.
+    p_value = complex(1.)  # np.sum(np.multiply(kout_grid, kin_grid), axis=-1) / np.square(klen_grid)
+    bp = b_cplx * p_value
+
+    # Get sqrt(alpha**2 + beta**2) value
+    sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
+
+    # Change the imaginary part sign
+    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask[sqrt_a2_b2.imag < 0] = True
+    sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
+
+    # Calculate the phase term
+    re = klen_grid * d / gamma_0 * sqrt_a2_b2.real
+    im = klen_grid * d / gamma_0 * sqrt_a2_b2.imag
+
+    magnitude = np.exp(-im).astype(np.complex128)
+    phase = np.cos(re) + np.sin(re) * 1.j
+
+    # Calculate some intermediate part
+    numerator = 1. - magnitude * phase
+    denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
+
+    # Take care of the exponential
+    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask[im <= 400] = True
+
+    reflect_p = bp * chih_pi / denominator
+    # reflect_p[mask] = bp[mask] * chih_pi * numerator[mask] / denominator[mask]
+
+    return reflect_s, reflect_p, b, kout_grid
+
+
+def get_R00_R0H_for_Laue(kin_grid, d, h, n,
+                         chi0, chih_sigma, chihbar_sigma,
+                         chih_pi, chihbar_pi):
     """
     This function aims to get the info quickly with cpu.
 
