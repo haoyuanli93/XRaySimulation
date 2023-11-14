@@ -84,7 +84,7 @@ def get_bragg_reflectivity_fix_crystal(kin, thickness, crystal_h, normal, chi_di
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + b_factor * chih_pi * chihbar_pi)
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -180,7 +180,7 @@ def get_bragg_reflectivity_per_entry(kin, thickness, crystal_h, normal, chi_dict
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + b_factor * chih_pi * chihbar_pi)
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
