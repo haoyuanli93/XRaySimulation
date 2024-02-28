@@ -729,6 +729,11 @@ def get_kout_single_device(device, kin):
                                        kin=kin)
         return kout
 
+    if device.type == "Total Reflection Mirror":
+        kout = util.get_mirror_kout(kin=kin,
+                                    normal=device.normal, )
+        return kout
+
 
 ####################################################
 #       Single incident wave vector
@@ -831,6 +836,17 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
             # Find the output wave vector
             kout_list.append(util.get_telescope_kout(optical_axis=device.lens_axis,
                                                      kin=kout_list[-1]))
+        if device.type == "Total Reflection Mirror":
+            intersection_list.append(util.get_intersection(initial_position=intersection_list[-1],
+                                                           k=kout_list[-1],
+                                                           normal=device.normal,
+                                                           surface_point=device.surface_point))
+            # Find the path length
+            displacement = intersection_list[-1] - intersection_list[-2]
+            path_length += np.dot(displacement, kout_list[-1]) / util.np.linalg.norm(kout_list[-1])
+
+            # Find the wave vecotr
+            kout_list.append(get_kout_single_device(device=device, kin=kout_list[-1]))
 
     ################################################################
     # Step 3: Find the output position on the observation plane

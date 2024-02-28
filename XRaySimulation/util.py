@@ -311,7 +311,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     # Get momentum tranfer
     sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha)
 
-    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
+    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=bool)
     # mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
 
     m_trans = np.multiply(klen_grid, -gamma_h - sqrt_gamma_alpha)
@@ -332,7 +332,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + np.multiply(b_cplx, chih_sigma * chihbar_sigma))
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -348,7 +348,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 100] = True
 
     reflect_s = chih_sigma * b_cplx / denominator
@@ -366,7 +366,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -382,7 +382,7 @@ def get_bragg_reflection_array(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 400] = True
 
     reflect_p = bp * chih_pi / denominator
@@ -491,8 +491,6 @@ def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
     # Get the reflectivity for the sigma polarization
     # ------------------------------------------------------------
 
-
-
     # Get alpha tidle
     alpha_tidle = (alpha * b + chi0 * (1. - b)) / 2.
 
@@ -500,7 +498,7 @@ def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + np.multiply(b_cplx, chih_sigma * chihbar_sigma))
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -516,7 +514,7 @@ def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 100] = True
 
     reflect_s = chih_sigma * b_cplx / denominator
@@ -534,7 +532,7 @@ def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -550,7 +548,7 @@ def get_ROO_ROH_for_Bragg(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 400] = True
 
     reflect_p = bp * chih_pi / denominator
@@ -602,7 +600,7 @@ def get_R00_R0H_for_Laue(kin_grid, d, h, n,
     # Get momentum tranfer
     sqrt_gamma_alpha = np.sqrt(gamma_h ** 2 - alpha)
 
-    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=np.bool)
+    # mask = np.zeros_like(sqrt_gamma_alpha, dtype=bool)
     # mask[np.abs(-gamma_h - sqrt_gamma_alpha) > np.abs(-gamma_h + sqrt_gamma_alpha)] = True
 
     m_trans = np.multiply(klen_grid, -gamma_h - sqrt_gamma_alpha)
@@ -623,7 +621,7 @@ def get_R00_R0H_for_Laue(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + np.multiply(b_cplx, chih_sigma * chihbar_sigma))
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -639,7 +637,7 @@ def get_R00_R0H_for_Laue(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 100] = True
 
     reflect_s = chih_sigma * b_cplx / denominator
@@ -657,7 +655,7 @@ def get_R00_R0H_for_Laue(kin_grid, d, h, n,
     sqrt_a2_b2 = np.sqrt(alpha_tidle ** 2 + bp * p_value * chih_pi * chihbar_pi)
 
     # Change the imaginary part sign
-    mask = np.zeros_like(sqrt_a2_b2, dtype=np.bool)
+    mask = np.zeros_like(sqrt_a2_b2, dtype=bool)
     mask[sqrt_a2_b2.imag < 0] = True
     sqrt_a2_b2[mask] = - sqrt_a2_b2[mask]
 
@@ -673,7 +671,7 @@ def get_R00_R0H_for_Laue(kin_grid, d, h, n,
     denominator = alpha_tidle * numerator + sqrt_a2_b2 * (2. - numerator)
 
     # Take care of the exponential
-    # mask = np.zeros_like(im, dtype=np.bool)
+    # mask = np.zeros_like(im, dtype=bool)
     # mask[im <= 400] = True
 
     reflect_p = bp * chih_pi / denominator
@@ -977,6 +975,18 @@ def get_telescope_kout(optical_axis, kin):
     return kout
 
 
+def get_mirror_kout(kin,
+                    normal,
+                    ):
+    # Get the projection of the kin along the direction of normal
+    # we always assume that the normal direction of the mirror is point towards the outer direction of the mirror
+    # Therefore the reflection is
+    # kout = kin - (kin . normal) normal
+    proj_len = np.dot(kin, normal)
+    kout = kin - normal * (2 * proj_len)
+    return kout
+
+
 def get_telescope_kout_list(optical_axis, kin):
     """
 
@@ -1130,7 +1140,7 @@ def get_fwhm(coordinate, curve_values, center=False):
 
     # Get the indexes for the range.
     indexes = np.arange(len(coordinate), dtype=np.int64)
-    mask = np.zeros_like(indexes, dtype=np.bool)
+    mask = np.zeros_like(indexes, dtype=bool)
     mask[curve_values >= half_max] = True
 
     indexes_above = indexes[mask]

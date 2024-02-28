@@ -618,6 +618,52 @@ class RectangleGrating:
         self.shift(displacement=ref_point)
 
 
+class TotalReflectionMirror:
+    def __init__(self,
+                 surface_point=np.zeros(3),
+                 normal=np.array([0., 0., 1.], dtype=np.float64),
+                 ):
+        """
+        :param surface_point: One point through which the surface goes through.
+        :param normal: The normal direction of the surface
+        """
+        self.type = "Total Reflection Mirror"
+
+        self.surface_point = surface_point
+        self.normal = normal
+        self.normal /= np.linalg.norm(self.normal)
+
+    def set_surface_point(self, surface_point):
+        self.surface_point = surface_point
+
+    def set_normal(self, normal):
+        self.normal = normal / np.linalg.norm(normal)
+
+    def shift(self, displacement):
+        self.surface_point += displacement
+
+    def rotate(self, rot_mat):
+        # The shift of the space does not change the reciprocal lattice and the normal direction
+        self.normal = np.ascontiguousarray(rot_mat.dot(self.normal))
+
+    def rotate_wrt_point(self, rot_mat, ref_point, include_boundary=True):
+        """
+        This is a function designed
+        :param rot_mat:
+        :param ref_point:
+        :param include_boundary:
+        :return:
+        """
+        # Step 1: shift with respect to that point
+        self.shift(displacement=-ref_point)
+
+        # Step 2: rotate the quantities
+        self.rotate(rot_mat=rot_mat)
+
+        # Step 3: shift it back to the reference point
+        self.shift(displacement=ref_point)
+
+
 class Prism:
     def __init__(self,
                  wavevec_delta=np.array([0, 50677. * 5e-6, 0]),
