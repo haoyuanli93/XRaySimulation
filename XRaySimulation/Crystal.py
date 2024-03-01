@@ -30,10 +30,12 @@ class ChannelCut:
                  energy_keV=10.0,
                  thickness_list=np.array([1e4, 1e4]),
                  gap=1e4,
+                 surface_center_offset=2e4,
                  edge_length_list=np.array([5e4, 5e4]),
                  asymmetry_angle_list=np.deg2rad(np.array([0., 0.])),
                  first_surface_loc="lower left",
                  source="x-server",
+                 crystal_property=None,
                  ):
         """
         Calculate the geometry
@@ -82,6 +84,8 @@ class ChannelCut:
                                                                          miller_index,
                                                                          energy_keV), 'wb') as handle:
                 pickle.dump(crystal_property, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        elif crystal_property:
+            pass
         else:
             with open(source, 'rb') as handle:
                 crystal_property = pickle.load(handle)
@@ -103,7 +107,7 @@ class ChannelCut:
 
         # Shift and rotate crystals to the correct position
         if first_surface_loc == "lower left":
-            displacement = np.array([0, gap, gap / np.tan(bragg_theta)])
+            displacement = np.array([0, gap, surface_center_offset])
 
             # Shift the surface center
             self.crystal_list[1].shift(displacement=displacement, include_boundary=True)
@@ -127,7 +131,7 @@ class ChannelCut:
                                                   include_boundary=True)
 
             # Shift the second crystal
-            displacement = np.array([0, -gap, gap / np.tan(bragg_theta)])
+            displacement = np.array([0, -gap, surface_center_offset])
 
             # Shift the surface center
             self.crystal_list[1].shift(displacement=displacement, include_boundary=True)

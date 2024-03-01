@@ -2,7 +2,7 @@
 <project version="4">
   <component name="SshConfigs">
     <configs>
-      <sshConfig authType="PASSWORD" host="sdf.slac.stanford.edu" id="3d2deed2-7e91-4d89-82d7-c25a6032e55f" port="22" nameFormat="DESCRIPTIVE" username="haoyuan" useOpenSSHConfig="true" />
+      <sshConfig authType="PASSWORD" host="s3df.slac.stanford.edu" id="3d2deed2-7e91-4d89-82d7-c25a6032e55f" port="22" nameFormat="DESCRIPTIVE" username="haoyuan" useOpenSSHConfig="true" />
     </configs>
   </component>
 </project>

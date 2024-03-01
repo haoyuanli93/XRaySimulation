@@ -548,8 +548,12 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
     rot_mat = util.rot_mat_in_yz_plane(theta=angle_adjust)
     channelcut.rotate_wrt_point(rot_mat=rot_mat,
                                 ref_point=np.copy(rot_center))
+
+    # Get the kout value
+    kout = get_kout_multi_device(device_list=channelcut.crystal_list, kin=kin)
+
     if get_curve:
-        return angles, rocking_curve, b_array
+        return kout[-1], angles, rocking_curve, b_array
 
 
 def get_channel_cut_auto_align_rotMat(channelcut,
