@@ -862,7 +862,7 @@ def get_lightpath(device_list, kin, initial_point, final_plane_point, final_plan
     displacement = intersection_list[-1] - intersection_list[-2]
     path_length += np.dot(displacement, kout_list[-1]) / util.np.linalg.norm(kout_list[-1])
 
-    return intersection_list, kout_list, path_length
+    return np.vstack(intersection_list), np.vstack(kout_list), path_length
 
 
 def get_trajectory(device_list, kin, initial_point, path_length):
@@ -948,7 +948,7 @@ def get_trajectory(device_list, kin, initial_point, path_length):
     # Step 3: Find the output position on the observation plane
     intersection_list.append(intersection_list[-1] + kout_list[-1] / util.np.linalg.norm(kout_list[-1]) * path_length)
 
-    return intersection_list, kout_list
+    return np.vstack(intersection_list), np.vstack(kout_list)
 
 
 ####################################################################################
