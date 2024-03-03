@@ -506,7 +506,7 @@ def align_channel_cut_dynamical_bragg_reflection(channelcut,
     # Rotate according to the geometric Bragg angle
     geo_Bragg_angle = util.get_bragg_angle(wave_length=two_pi / np.linalg.norm(kin),
                                            plane_distance=two_pi / np.linalg.norm(channelcut.crystal_list[0].h))
-    print("The geometric Bragg angle is {:.2f} deg".format(np.rad2deg(geo_Bragg_angle)))
+    #print("The geometric Bragg angle is {:.2f} deg".format(np.rad2deg(geo_Bragg_angle)))
 
     # Rotate the channel-cut according to the geometry of the channel-cut crystal
     if channelcut.first_crystal_loc == "lower left":
