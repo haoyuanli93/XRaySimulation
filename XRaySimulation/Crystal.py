@@ -621,6 +621,25 @@ class RectangleGrating:
         # Step 3: shift it back to the reference point
         self.shift(displacement=ref_point)
 
+    def get_grating_coefficient(self, kin, order):
+        if np.abs(order) > 0:
+
+            factor, _, _ = util.get_square_grating_transmission(kin=kin,
+                                                                height_vec=self.h,
+                                                                ab_ratio=self.ab_ratio,
+                                                                base=self.thick_vec,
+                                                                refractive_index=self.n,
+                                                                order=order,
+                                                                grating_k=self.base_wave_vector * order)
+        else:
+            factor = util.get_square_grating_0th_transmission(kin=kin,
+                                                              height_vec=self.h,
+                                                              ab_ratio=self.ab_ratio,
+                                                              base=self.thick_vec,
+                                                              refractive_index=self.n)
+
+        return factor
+
 
 class TotalReflectionMirror:
     def __init__(self,
